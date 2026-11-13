@@ -1,0 +1,98 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, attendee_picker, location_select, kind_select, status_badge, type_tag with context %}{% from '_m.html' import lich_nav, help with context %}
+{% block body %}
+{{ lich_nav() }}
+<div class="bar"><h1>Buổi dạy</h1></div>
+
+<section class="card">
+  <form method="get" class="filters">
+    <div class="row">
+      <label>Từ ngày <input type="date" name="tu" value="{{ flt.a.isoformat() }}"></label>
+      <label>Đến ngày <input type="date" name="den" value="{{ flt.b.isoformat() }}"></label>
+      <label>Loại hình <select name="loai"><option value="">Tất cả</option>
+        <option value="center" {{ 'selected' if flt.teaching_type == 'center' }}>Dạy trung tâm</option>
+        <option value="private" {{ 'selected' if flt.teaching_type == 'private' }}>Dạy riêng</option></select></label>
+      <label>Cơ sở <select name="co_so"><option value="">Tất cả</option>
+        {% for l in locs %}<option value="{{ l.id }}" {{ 'selected' if flt.location_id == l.id|string }}>{{ l.name }}</option>{% endfor %}</select></label>
+      <label>Học viên <select name="hoc_vien"><option value="">Tất cả</option>
+        {% for s in students %}<option value="{{ s.id }}" {{ 'selected' if flt.student_id == s.id|string }}>{{ s.display_name }}</option>{% endfor %}</select></label>
+    </div>
+    <div class="row">
+      <label>Loại ca <select name="loai_ca"><option value="">Tất cả</option>
+        {% for k in KINDS %}<option value="{{ k }}" {{ 'selected' if flt.kind == k }}>{{ (k)|kind }}</option>{% endfor %}</select></label>
+      <label>Trạng thái <select name="trang_thai"><option value="">Đã dạy + Cần kiểm tra</option>
+        {% for k in ['confirmed','needs_review','void'] %}<option value="{{ k }}" {{ 'selected' if flt.status == k }}>{{ STATUS_LABEL[k] }}</option>{% endfor %}</select></label>
+      <label>Đối soát <select name="doi_soat"><option value="">Tất cả</option>
+        <option value="pending" {{ 'selected' if flt.recon == 'pending' }}>Ngày có chênh lệch chờ duyệt</option>
+        <option value="clean" {{ 'selected' if flt.recon == 'clean' }}>Không có chênh lệch chờ</option></select></label>
+      <label>Thu tiền (dạy riêng) <select name="thu_tien"><option value="">Tất cả</option>
+        {% for k, v in [('unpaid','Chưa thu'),('partial','Thu một phần'),('paid','Đã thu'),('na','Chưa có giá')] %}<option value="{{ k }}" {{ 'selected' if flt.payment == k }}>{{ v }}</option>{% endfor %}</select></label>
+      <label>Lớp <input name="lop" value="{{ flt.class_group or '' }}"></label>
+      <label class="grow">Tìm tên (không dấu) <input name="q" value="{{ flt.q or '' }}" placeholder="vd: quynh"></label>
+    </div>
+    <div class="row">
+      <button class="btn primary">Lọc</button>
+      <a class="btn" href="{{ url_for('sessions_page') }}">Xóa bộ lọc</a>
+      <button type="button" class="btn" data-save-filter>Lưu bộ lọc</button>
+      <span data-saved-filters class="row"></span>
+    </div>
+    <p class="hint">Bộ lọc chỉ là chế độ xem — không làm thay đổi file xuất mẫu Chấm công.</p>
+  </form>
+</section>
+
+{% if pending %}
+<section class="card">
+  <h2>Ca dự kiến chờ xác nhận ({{ pending|length }})</h2>
+  <form method="post" action="{{ url_for('bulk_preview') }}">{{ csrf() }}
+    <ul class="list">
+      <li><label class="inline"><input type="checkbox" data-checkall="pid"> Chọn tất cả</label></li>
+      {% for p in pending %}
+      <li><label class="inline"><input type="checkbox" name="pid" value="{{ p.id }}"></label>
+        <span class="t">{{ p.session_date|dm }} {{ p.start_time|hm }}–{{ p.end_time|hm }}</span>{{ type_tag(p.teaching_type) }}
+        <span class="grow">{{ p.location_name }} · {{ p.expected_students|map(attribute='name')|join(', ') or 'chưa có danh sách' }}</span>
+        {{ status_badge('pending' if p.status == 'planned' else p.status) }}
+        <a class="btn small" href="{{ url_for('planned_detail', pid=p.id) }}">Mở / điều chỉnh</a></li>
+      {% endfor %}
+    </ul>
+    {% if g.owner.can_write %}<button class="btn champ">Xem trước xác nhận theo kế hoạch</button>{% endif %}
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Buổi dạy đã ghi nhận ({{ acts|length }})</h2>
+  {% if acts %}
+  <div class="tablewrap"><table>
+    <thead><tr><th class="sticky-col">Ngày</th><th>Giờ</th><th>Cơ sở</th><th>Học viên</th><th class="num">Số HV</th><th>Phút</th><th>Loại ca</th><th>Trạng thái</th><th>Nguồn</th><th></th></tr></thead>
+    <tbody>{% for a in acts %}
+      <tr><td class="sticky-col">{{ a.session_date|dmy }}</td><td>{{ a.start_time|hm }}–{{ a.end_time|hm }}</td>
+        <td>{{ type_tag(a.teaching_type) }} {{ a.location_label }}</td>
+        <td>{{ a.attendees|map(attribute='name')|join(', ') }}</td><td class="num">{{ a.attendees|length }}</td>
+        <td>{{ a.duration_min or '' }}</td><td>{{ (a.session_kind)|kind }}</td><td>{{ status_badge(a.status) }}</td>
+        <td>{{ {'schedule':'Lịch','manual':'Thêm tay','import_legacy':'Import'}[a.source] }}</td>
+        <td><a class="btn small" href="{{ url_for('actual_detail', aid=a.id) }}">Mở</a></td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">Không có buổi dạy phù hợp bộ lọc.</p>{% endif %}
+</section>
+
+{% if g.owner.can_write %}
+<section class="card" id="them">
+  <h2>Thêm ca phát sinh (ngoài lịch)</h2>
+  <form method="post" action="{{ url_for('add_extra') }}">{{ csrf() }}
+    <div class="row">
+      <label>Ngày <input type="date" name="day" value="{{ today.isoformat() }}" required></label>
+      <label>Bắt đầu <input type="time" name="start" required></label>
+      <label>Kết thúc <input type="time" name="end" required></label>
+      <label>Loại ca {{ kind_select(KINDS) }}</label>
+    </div>
+    <label>Cơ sở / địa điểm {{ location_select(locs) }}</label>
+    {{ attendee_picker([], students) }}
+    <label>Ghi chú (tên bé dạy thử, ca ghép / gộp lớp…) <input name="notes"></label>
+    <label>Lý do ngoại lệ nếu trùng giờ <input name="override_reason"></label>
+    <label class="inline"><input type="checkbox" name="confirm_now" value="1"> Tôi đã dạy ca này — xác nhận luôn</label>
+    <p class="hint">Không tick: ca được thêm vào lịch ở trạng thái Dự kiến (chưa tính công). Lịch lặp không bị thay đổi.</p>
+    <button class="btn primary">Lưu ca phát sinh</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

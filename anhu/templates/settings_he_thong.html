@@ -1,0 +1,26 @@
+{% extends 'base.html' %}{% from '_m.html' import settings_back with context %}
+{% block body %}
+{{ settings_back() }}
+<h1>{{ title }}</h1>
+<div class="grid2">
+<section class="card">
+  <h2>Phiên bản</h2>
+  <dl class="kv"><dt>Ứng dụng</dt><dd>ANHU Teaching Studio {{ info.version }}</dd><dt>PostgreSQL</dt><dd>{{ info.pg }}</dd>
+    <dt>Migration đã áp dụng</dt><dd>{{ info.migrations|length }}</dd></dl>
+  <ul class="list">{% for m in info.migrations %}<li><span class="grow"><code>{{ m.name }}</code></span><small class="muted">{{ m.applied_at.strftime('%d/%m/%Y %H:%M') if m.applied_at else '' }}</small></li>{% endfor %}</ul>
+</section>
+<section class="card">
+  <h2>Dữ liệu của tài khoản đang xem</h2>
+  <dl class="kv"><dt>Học viên đang hoạt động</dt><dd>{{ info.counts.students }}</dd><dt>Buổi dạy đã xác nhận</dt><dd>{{ info.counts.sessions }}</dd>
+    <dt>Lịch cố định đang chạy</dt><dd>{{ info.counts.templates }}</dd><dt>Kỳ đã chốt</dt><dd>{{ info.counts.locked }}</dd>
+    <dt>Mục nhật ký</dt><dd>{{ info.counts.audit }}</dd>
+    <dt>Sao lưu gần nhất</dt><dd>{{ info.last_backup.created_at.strftime('%d/%m/%Y') if info.last_backup else 'chưa có' }}</dd></dl>
+  {% if info.warnings %}<h3>Cảnh báo</h3><ul>{% for w in info.warnings %}<li>{{ w }}</li>{% endfor %}</ul>{% endif %}
+</section>
+</div>
+<section class="card">
+  <h2>Kiểm tra nhanh</h2>
+  <p>Địa chỉ kiểm tra sức khỏe cho người quản trị: <a href="{{ url_for('health') }}"><code>{{ url_for('health') }}</code></a>. Trả về <code>{"status":"ok"}</code> khi kết nối được cơ sở dữ liệu.</p>
+  <p class="hint">Hướng dẫn cập nhật phiên bản, sao lưu toàn máy chủ và chuyển máy chủ: <i>docs/QUAN_TRI_VAN_HANH.md</i>.</p>
+</section>
+{% endblock %}

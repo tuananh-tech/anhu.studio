@@ -1,0 +1,33 @@
+{% extends 'base.html' %}{% from '_m.html' import help, settings_back with context %}
+{% block body %}
+{{ settings_back() }}
+<h1>{{ title }}</h1>
+{% call help() %}
+<p>Nhật ký do <b>cơ sở dữ liệu tự ghi</b> mỗi khi có thay đổi. Ứng dụng không có quyền sửa hay xóa nhật ký.
+Mỗi mục ghi lại: thời điểm, người thực hiện, bảng dữ liệu, các trường thay đổi (trước → sau), và lý do nếu có nhập.</p>
+{% endcall %}
+<form method="get" class="card filters">
+  <div class="row">
+    <label>Loại dữ liệu <select name="bang"><option value="">Tất cả</option>{% for k, v in TABLE_LABEL.items()|sort(attribute='1') %}<option value="{{ k }}" {{ 'selected' if args.bang == k }}>{{ v }}</option>{% endfor %}</select></label>
+    <label>Thao tác <select name="hanh_dong"><option value="">Tất cả</option>{% for k, v in ACTION_LABEL.items() %}<option value="{{ k }}" {{ 'selected' if args.hanh_dong == k }}>{{ v }}</option>{% endfor %}</select></label>
+    <label>Từ ngày <input type="date" name="tu" value="{{ args.tu or '' }}"></label>
+    <label>Đến ngày <input type="date" name="den" value="{{ args.den or '' }}"></label>
+    <label class="grow">Tìm trong nội dung / lý do <input name="q" value="{{ args.q or '' }}"></label>
+    <button class="btn">Lọc</button>
+  </div>
+</form>
+<p class="muted">{{ total }} mục · trang {{ page }}/{{ pages }}</p>
+<div class="tablewrap"><table class="log-table">
+  <thead><tr><th>Thời điểm</th><th>Người</th><th>Dữ liệu</th><th>Thao tác</th><th>Thay đổi</th><th>Lý do</th></tr></thead>
+  <tbody>{% for it in items %}<tr>
+    <td>{{ it.at.strftime('%d/%m/%Y %H:%M:%S') }}</td><td>{{ it.actor or '—' }}</td>
+    <td>{{ TABLE_LABEL.get(it.table_name, it.table_name) }}</td><td>{{ ACTION_LABEL.get(it.action, it.action) }}</td>
+    <td><ul class="changes">{% for k, b, a in it.changes %}<li><b>{{ k }}</b>: {% if it.action == 'UPDATE' %}<s>{{ b if b is not none else '∅' }}</s> → {% endif %}{{ a if a is not none else '∅' }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul></td>
+    <td>{{ it.reason or '' }}</td></tr>
+  {% else %}<tr><td colspan="6" class="muted">Không có mục nào.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% if pages > 1 %}<nav class="pager">
+  {% if page > 1 %}<a class="btn small" href="{{ url_for('settings_section', sec='nhat-ky', trang=page - 1, bang=args.bang, hanh_dong=args.hanh_dong, tu=args.tu, den=args.den, q=args.q) }}">← Trước</a>{% endif %}
+  {% if page < pages %}<a class="btn small" href="{{ url_for('settings_section', sec='nhat-ky', trang=page + 1, bang=args.bang, hanh_dong=args.hanh_dong, tu=args.tu, den=args.den, q=args.q) }}">Sau →</a>{% endif %}
+</nav>{% endif %}
+{% endblock %}

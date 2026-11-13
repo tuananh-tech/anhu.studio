@@ -1,0 +1,37 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf with context %}
+{% block body %}
+<h1>Xem trước import lịch sử</h1>
+<section class="kpis">
+  <div class="kpi"><b>{{ stats.responses }}</b><span>Phản hồi đọc được (Dữ liệu + Nhập liệu)</span></div>
+  <div class="kpi alert"><b>{{ stats.duplicates }}</b><span>Phản hồi trùng nội dung — tự bỏ qua</span></div>
+  <div class="kpi"><b>{{ stats.unique }}</b><span>Phản hồi duy nhất</span></div>
+  <div class="kpi"><b>{{ stats.new }}</b><span>Ca mới sẽ ghi</span></div>
+  <div class="kpi"><b>{{ stats.already_imported }}</b><span>Ca đã có từ lần import trước</span></div>
+  <div class="kpi {{ 'alert' if stats.needs_review }}"><b>{{ stats.needs_review }}</b><span>Ca sẽ ở trạng thái Cần kiểm tra</span></div>
+</section>
+{% if plan.conflicts %}<p class="note red">{{ plan.conflicts|length }} ngày có hai phản hồi khác nội dung — cả hai được liệt kê; bỏ chọn bản sai.</p>{% endif %}
+{% if plan.timesheet_unmatched %}<p class="note">{{ plan.timesheet_unmatched|length }} hàng sheet Chấm công không khớp phản hồi nào (hàng: {{ plan.timesheet_unmatched|map(attribute='row')|join(', ') }}). Không import tự động các hàng này.</p>{% endif %}
+
+<form method="post" action="{{ url_for('legacy_import_page') }}">{{ csrf() }}
+  <input type="hidden" name="import_id" value="{{ iid }}">
+  <p class="hint">Bỏ chọn ca nào không muốn ghi. Cột “Còn không” được giữ nguyên văn để tham khảo, không dùng để tính công.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Ghi?</th><th class="sticky-col">Ngày</th><th>Nguồn</th><th>Cơ sở</th><th>Giờ (gốc)</th><th>Tên (gốc)</th><th class="num">Số HV</th><th>Loại ca</th><th>Còn không</th><th>Vấn đề</th></tr></thead>
+    <tbody>
+    {% for r in plan.unique %}{% for p in r.sessions %}{% set done = p.fingerprint in existing %}
+      <tr class="{{ 'empty' if done }}">
+        <td>{% if done %}đã có{% else %}<input type="checkbox" name="keep" value="{{ p.fingerprint }}" checked aria-label="Ghi ca này">{% endif %}</td>
+        <td class="sticky-col">{{ r.day|dmy }}</td><td>{{ r.sheet }} h{{ r.row }}</td><td>{{ r.location }}</td>
+        <td>{{ p.time_raw }}</td><td>{{ p.names_raw }}</td><td class="num">{{ p.attendees|length }}</td>
+        <td>{{ (p.kind)|kind }}{{ ' (' ~ p.type_raw ~ ')' if p.type_raw }}</td><td>{{ p.flag_raw }}</td>
+        <td>{{ p.issues|join('; ') }}</td></tr>
+    {% endfor %}{% endfor %}
+    </tbody>
+  </table></div>
+  <details><summary>{{ plan.duplicates|length }} phản hồi trùng bị bỏ qua</summary>
+    <ul class="log">{% for r in plan.duplicates %}<li>{{ r.sheet }} hàng {{ r.row }} ({{ r.day|dmy }}) = bản sao của {{ r.duplicate_of[0] }} hàng {{ r.duplicate_of[1] }}</li>{% endfor %}</ul>
+  </details>
+  <div class="row mt"><button class="btn primary">Ghi các ca đã chọn</button>
+    <a class="btn" href="{{ url_for('settings_section', sec='excel') }}#import">Hủy</a></div>
+</form>
+{% endblock %}

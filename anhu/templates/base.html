@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}ANHU Teaching Studio{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+<script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+{% if g.uid %}
+<header class="top">
+  <a class="brand" href="{{ url_for('dashboard') }}">ANHU <span>Teaching Studio</span></a>
+  <nav class="nav" aria-label="Điều hướng chính">
+    {% set ep = request.endpoint or '' %}
+    <a href="{{ url_for('dashboard') }}" class="{{ 'on' if ep == 'dashboard' }}">Tổng quan</a>
+    <a href="{{ url_for('calendar') }}" class="{{ 'on' if ep in ('calendar','planned_detail','templates_page','sessions_page','actual_detail','bulk_preview') }}">Lịch dạy</a>
+    <a href="{{ url_for('students_page') }}" class="{{ 'on' if ep.startswith('student') }}">Học viên</a>
+    <a href="{{ url_for('timesheet_page') }}" class="{{ 'on' if ep.startswith('timesheet') or ep.startswith('recon') }}">Chấm công</a>
+    <a href="{{ url_for('reports_page') }}" class="{{ 'on' if ep.startswith('reports') }}">Báo cáo</a>
+  </nav>
+  <div class="who">
+    {% if g.owners and g.owners|length > 1 %}
+    <form method="get" class="inline">
+      <label class="sr" for="gv">Giáo viên</label>
+      <select id="gv" name="gv" data-autosubmit>
+        {% for o in g.owners %}<option value="{{ o.id }}" {{ 'selected' if o.id == g.owner.id }}>{{ o.name }}{{ '' if o.self else (' (chia sẻ, chỉ xem)' if not o.can_write else ' (chia sẻ)') }}</option>{% endfor %}
+      </select>
+    </form>
+    {% else %}<span class="muted">{{ session.name }}</span>{% endif %}
+    <a class="gear {{ 'on' if (request.endpoint or '').startswith('settings') or request.endpoint == 'legacy_import_page' }}" href="{{ url_for('settings_page') }}" title="Cài đặt &amp; quản trị">⚙ <span>Cài đặt</span></a>
+    <form method="post" action="{{ url_for('logout') }}" class="inline">
+      <input type="hidden" name="_csrf" value="{{ session.csrf }}"><button class="link">Đăng xuất</button>
+    </form>
+  </div>
+</header>
+{% if g.owner and not g.owner.self %}<div class="banner warn">Đang xem dữ liệu được chia sẻ của <b>{{ g.owner.name }}</b>{{ ' — chỉ xem' if not g.owner.can_write }}.</div>{% endif %}
+{% endif %}
+<main class="wrap">
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in msgs %}<div class="flash {{ cat }}" role="status">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+  {% block body %}{% endblock %}
+</main>
+</body>
+</html>

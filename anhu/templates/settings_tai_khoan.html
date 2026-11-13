@@ -1,0 +1,86 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, help, settings_back with context %}
+{% block body %}
+{{ settings_back() }}
+<h1>{{ title }}</h1>
+{% call help() %}
+<ul>
+<li>Hệ thống cho phép tối đa <b>2 tài khoản giáo viên</b>. Mặc định dữ liệu của hai tài khoản <b>tách biệt hoàn toàn</b>; quy định này nằm ở tầng cơ sở dữ liệu nên không thể vượt qua bằng giao diện.</li>
+<li>Muốn cho người kia xem hoặc sửa giúp dữ liệu của mình, dùng mục <b>Chia sẻ</b>.</li>
+<li>Quản trị viên tạo và khóa được tài khoản, nhưng <b>không</b> xem được dữ liệu của tài khoản kia nếu chưa được chia sẻ.</li>
+</ul>
+{% endcall %}
+
+{% if temp %}
+<div class="note red" role="alert"><b>Mật khẩu tạm cho {{ temp.email }}:</b> <code class="pw">{{ temp.pw }}</code><br>
+Thông tin này chỉ hiện <b>một lần</b>. Hãy gửi cho giáo viên qua kênh riêng. Giáo viên sẽ phải đổi mật khẩu ở lần đăng nhập đầu.</div>
+{% endif %}
+
+<div class="grid2">
+<section class="card" id="ho-so">
+  <h2>Hồ sơ của tôi</h2>
+  <dl class="kv"><dt>Email</dt><dd>{{ me.email }}</dd><dt>Vai trò</dt><dd>{{ 'Quản trị' if me.is_admin else 'Giáo viên' }}</dd>
+    <dt>Đăng nhập gần nhất</dt><dd>{{ me.last_login_at.strftime('%d/%m/%Y %H:%M') if me.last_login_at else '—' }}</dd></dl>
+  <form method="post" action="{{ url_for('settings_action', action='ho-so') }}">{{ csrf() }}
+    <label>Tên hiển thị (in trong file xuất, cột Giáo viên) <input name="display_name" value="{{ me.display_name }}" required maxlength="80"></label>
+    <label>Môn / chuyên môn <input name="subject" value="{{ me.subject or '' }}" maxlength="80"></label>
+    <button class="btn small">Lưu hồ sơ</button>
+  </form>
+</section>
+
+<section class="card" id="mat-khau">
+  <h2>Đổi mật khẩu</h2>
+  {% if session.must_change %}<p class="note">Bạn đang dùng mật khẩu tạm — hãy đặt mật khẩu mới.</p>{% endif %}
+  <form method="post" action="{{ url_for('settings_action', action='mat-khau') }}">{{ csrf() }}
+    <label>Mật khẩu hiện tại <input type="password" name="old" autocomplete="current-password" required></label>
+    <label>Mật khẩu mới (≥ 10 ký tự) <input type="password" name="new" autocomplete="new-password" minlength="10" required></label>
+    <label>Nhập lại <input type="password" name="new2" autocomplete="new-password" minlength="10" required></label>
+    <button class="btn small primary">Đổi mật khẩu</button>
+  </form>
+</section>
+</div>
+
+{% if users is not none %}
+<section class="card" id="tai-khoan">
+  <h2>Tài khoản giáo viên <small class="muted">({{ users|selectattr('is_active')|list|length }}/2 đang hoạt động)</small></h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Tên</th><th>Email</th><th>Vai trò</th><th>Trạng thái</th><th>Đăng nhập gần nhất</th><th></th></tr></thead>
+    <tbody>{% for u in users %}
+      <tr><td>{{ u.display_name }}</td><td>{{ u.email }}</td><td>{{ 'Quản trị' if u.is_admin else 'Giáo viên' }}</td>
+        <td>{% if u.is_active %}<span class="badge st-confirmed">Hoạt động</span>{% else %}<span class="badge st-void">Đã khóa</span>{% endif %}
+          {% if u.must_change_password %}<span class="badge st-pending">mật khẩu tạm</span>{% endif %}</td>
+        <td>{{ u.last_login_at.strftime('%d/%m/%Y %H:%M') if u.last_login_at else 'chưa' }}</td>
+        <td>{% if u.id|string != g.uid %}
+          <form method="post" action="{{ url_for('settings_action', action='dat-lai-mat-khau') }}" class="inline" data-confirm="Đặt lại mật khẩu tạm cho {{ u.email }}?">{{ csrf() }}
+            <input type="hidden" name="user_id" value="{{ u.id }}"><button class="btn small">Đặt lại mật khẩu</button></form>
+          <form method="post" action="{{ url_for('settings_action', action='khoa-tai-khoan') }}" class="inline"
+                data-confirm="{{ 'Khóa' if u.is_active else 'Mở khóa' }} tài khoản {{ u.email }}? Dữ liệu được giữ nguyên.">{{ csrf() }}
+            <input type="hidden" name="user_id" value="{{ u.id }}"><input type="hidden" name="active" value="{{ '0' if u.is_active else '1' }}">
+            <input type="hidden" name="reason" value="{{ 'khóa' if u.is_active else 'mở khóa' }} tài khoản">
+            <button class="btn small {{ 'danger' if u.is_active }}">{{ 'Khóa' if u.is_active else 'Mở khóa' }}</button></form>
+        {% else %}<span class="muted">(bạn)</span>{% endif %}</td></tr>
+    {% endfor %}</tbody></table></div>
+  {% if users|selectattr('is_active')|list|length < 2 %}
+  <details class="mt"><summary>+ Tạo tài khoản giáo viên</summary>
+    <form method="post" action="{{ url_for('settings_action', action='tao-tai-khoan') }}" class="row">{{ csrf() }}
+      <label class="grow">Email <input type="email" name="email" required></label>
+      <label class="grow">Tên giáo viên <input name="display_name" required maxlength="80"></label>
+      <button class="btn primary small">Tạo &amp; cấp mật khẩu tạm</button></form>
+  </details>
+  {% else %}<p class="hint">Đã đủ 2 tài khoản hoạt động. Muốn thêm tài khoản khác, phải khóa một tài khoản trước.</p>{% endif %}
+</section>
+{% endif %}
+
+<section class="card" id="chia-se">
+  <h2>Chia sẻ dữ liệu của tôi</h2>
+  <p class="hint">Chỉ chia sẻ khi thực sự cần. Có hai mức: “chỉ xem”, hoặc “xem và sửa”. Có thể ngừng chia sẻ bất kỳ lúc nào.</p>
+  <ul class="list">{% for s in shares %}<li><span class="grow">{{ s.display_name }} ({{ s.email }}) — {{ 'xem và sửa' if s.can_write else 'chỉ xem' }}</span>
+    <form method="post" action="{{ url_for('settings_action', action='bo-chia-se') }}" class="inline">{{ csrf() }}<input type="hidden" name="grantee_id" value="{{ s.grantee_id }}"><button class="btn small danger">Ngừng chia sẻ</button></form></li>
+  {% else %}<li class="muted">Chưa chia sẻ cho ai.</li>{% endfor %}</ul>
+  {% if g.owner.self %}
+  <form method="post" action="{{ url_for('settings_action', action='chia-se') }}" class="row mt">{{ csrf() }}
+    <label class="grow">Email tài khoản giáo viên kia <input type="email" name="email" required></label>
+    <label class="inline"><input type="checkbox" name="can_write" value="1"> Cho phép sửa</label>
+    <button class="btn small">Chia sẻ</button></form>
+  {% endif %}
+</section>
+{% endblock %}

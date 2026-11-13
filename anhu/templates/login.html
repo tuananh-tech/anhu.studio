@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf with context %}
+{% block body %}
+<section class="login card">
+  <h1>ANHU <span class="champ">Teaching Studio</span></h1>
+  <p class="muted">Chỉ dành cho tài khoản đã được duyệt.</p>
+  <form method="post">{{ csrf() }}
+    <label>Email <input type="email" name="email" autocomplete="username" required autofocus></label>
+    <label>Mật khẩu <input type="password" name="password" autocomplete="current-password" required></label>
+    <button class="btn primary wide">Đăng nhập</button>
+  </form>
+</section>
+{% endblock %}

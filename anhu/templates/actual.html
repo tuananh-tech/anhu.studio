@@ -1,0 +1,69 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, attendee_picker, kind_select, status_badge, type_tag with context %}
+{% block body %}
+<div class="bar">
+  <div class="left"><h1>Buổi dạy {{ a.session_date|dmy }} · {{ a.start_time|hm }}–{{ a.end_time|hm }}</h1></div>
+  <div class="right">{{ type_tag(a.teaching_type) }} {{ status_badge(a.status) }}
+    {% if a.planned_session_id %}<a class="btn small" href="{{ url_for('planned_detail', pid=a.planned_session_id) }}">Ca dự kiến</a>{% endif %}
+    <a class="btn small" href="{{ url_for('sessions_page') }}">← Buổi dạy</a></div>
+</div>
+{% if a.status == 'needs_review' %}<p class="note red">Cần kiểm tra: {{ a.review_reason or 'thiếu thông tin' }}. Ca này <b>chưa được tính công</b>.</p>{% endif %}
+{% if locked %}<p class="note">Kỳ {{ a.session_date.month }}/{{ a.session_date.year }} đã <b>chốt</b>. Muốn sửa, mở kỳ ở trang Chấm công (bắt buộc ghi lý do).</p>{% endif %}
+
+<div class="grid2">
+<section class="card">
+  <dl class="kv">
+    <dt>Cơ sở</dt><dd>{{ a.location_label }}{{ ' — ' ~ a.center_name if a.center_name }}</dd>
+    <dt>Số học viên</dt><dd><b>{{ a.attendees|length }}</b> (tự đếm từ danh sách)</dd>
+    <dt>Thời lượng</dt><dd>{{ a.duration_min }} phút</dd>
+    <dt>Loại ca</dt><dd>{{ (a.session_kind)|kind }}</dd>
+    <dt>Nguồn</dt><dd>{{ {'schedule':'Xác nhận từ lịch','manual':'Thêm tay','import_legacy':'Import file Excel cũ'}[a.source] }}</dd>
+    {% if a.confirmed_at %}<dt>Xác nhận lúc</dt><dd>{{ a.confirmed_at.strftime('%d/%m/%Y %H:%M') }}</dd>{% endif %}
+    {% if a.teaching_type == 'private' %}
+    <dt>Giá buổi</dt><dd>{{ a.price_amount|money if a.price_amount is not none else 'Chưa cấu hình giá đã xác nhận' }}</dd>
+    <dt>Thu tiền</dt><dd>{{ {'na':'—','unpaid':'Chưa thu','partial':'Thu một phần','paid':'Đã thu'}[a.payment_status] }} · đã thu {{ a.paid_amount|money }}</dd>
+    {% endif %}
+  </dl>
+  <h3>Học viên</h3>
+  <ol>{% for x in a.attendees %}<li>{{ x.name }}{% if x.student_id %} <a href="{{ url_for('student_detail', sid=x.student_id) }}">hồ sơ</a>{% else %} <small class="muted">(chỉ có tên — chờ xác minh)</small>{% endif %}</li>{% endfor %}</ol>
+</section>
+
+{% if g.owner.can_write and a.status != 'void' %}
+<section class="card">
+  <h2>Sửa buổi dạy</h2>
+  <form method="post">{{ csrf() }}
+    {{ attendee_picker(a.attendees, students) }}
+    <div class="row">
+      <label>Bắt đầu <input type="time" name="start" value="{{ a.start_time|hm }}" required></label>
+      <label>Kết thúc <input type="time" name="end" value="{{ a.end_time|hm }}" required></label>
+      <label>Loại ca {{ kind_select(KINDS, a.session_kind) }}</label>
+    </div>
+    <label>Trạng thái <select name="status">
+      <option value="confirmed" {{ 'selected' if a.status == 'confirmed' }}>Đã dạy (tính công)</option>
+      <option value="needs_review" {{ 'selected' if a.status == 'needs_review' }}>Cần kiểm tra (chưa tính)</option></select></label>
+    <label>Ghi chú <input name="notes" value="{{ a.notes or '' }}"></label>
+    {% if a.teaching_type == 'private' %}
+    <div class="row">
+      <label>Thu tiền <select name="payment_status">{% for k, v in [('unpaid','Chưa thu'),('partial','Thu một phần'),('paid','Đã thu'),('na','—')] %}<option value="{{ k }}" {{ 'selected' if a.payment_status == k }}>{{ v }}</option>{% endfor %}</select></label>
+      <label>Số tiền đã thu <input type="number" min="0" step="1000" name="paid_amount" value="{{ a.paid_amount|int }}"></label>
+    </div>
+    {% endif %}
+    <label>Lý do ngoại lệ nếu trùng giờ <input name="override_reason"></label>
+    <label>Lý do chỉnh sửa (bắt buộc, ghi nhật ký) <input name="reason" required></label>
+    <button class="btn primary">Lưu thay đổi</button>
+  </form>
+  <form method="post" action="{{ url_for('actual_unconfirm', aid=a.id) }}" data-confirm="Hủy xác nhận buổi dạy này? Ca sẽ không còn được tính công.">{{ csrf() }}
+    <details><summary>Hủy xác nhận</summary>
+      <label>Lý do <input name="reason" required></label><button class="btn small danger">Hủy xác nhận</button></details>
+  </form>
+</section>
+{% endif %}
+</div>
+
+<section class="card"><details><summary>Nhật ký thay đổi</summary>
+  <ul class="list log">
+    {% for l in log %}<li>{{ l.at.strftime('%d/%m/%Y %H:%M') }} · {{ l.actor or 'hệ thống' }} · ca {{ l.action }}{{ ' · ' ~ l.reason if l.reason }}
+      {% if l.action == 'UPDATE' %}<small class="muted">{% for k, v in l.after.items() if k not in ('updated_at',) and l.before.get(k) != v %}{{ k }}: {{ l.before.get(k) }} → {{ v }}; {% endfor %}</small>{% endif %}</li>{% endfor %}
+    {% for l in att_log %}<li>{{ l.at.strftime('%d/%m/%Y %H:%M') }} · {{ l.actor or 'hệ thống' }} · học viên {{ l.action }}: {{ (l.after or l.before).name }}{{ ' · ' ~ l.reason if l.reason }}</li>{% endfor %}
+  </ul>
+</details></section>
+{% endblock %}

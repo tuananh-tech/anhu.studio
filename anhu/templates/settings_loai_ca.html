@@ -1,0 +1,42 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, help, settings_back with context %}
+{% block body %}
+{{ settings_back() }}
+<h1>{{ title }}</h1>
+{% call help() %}
+<ul>
+<li>Có thể đổi <b>tên hiển thị</b> và <b>ẩn</b> loại ca ít dùng khỏi danh sách chọn. Dữ liệu cũ vẫn giữ nguyên.</li>
+<li>Loại ca mới thêm <b>chưa được tính công</b>. Muốn tính, vào <a href="{{ url_for('settings_section', sec='quy-tac') }}">Quy tắc chấm công</a>, đưa loại ca đó vào cột phù hợp và xác nhận. Hệ thống không tự đoán cách tính.</li>
+<li>Tên trạng thái (Dự kiến, Đã dạy, Nghỉ/hủy…) chỉ thay đổi chữ hiển thị. Ý nghĩa nghiệp vụ của từng trạng thái giữ nguyên.</li>
+</ul>
+{% endcall %}
+{% set w = g.owner.can_write %}
+<section class="card">
+  <h2>Loại ca dạy</h2>
+  <form method="post" action="{{ url_for('settings_action', action='loai-ca') }}">{{ csrf() }}
+  <div class="tablewrap"><table>
+    <thead><tr><th>Mã</th><th>Tên hiển thị</th><th>Hiện trong danh sách chọn</th><th>Thứ tự</th><th>Số buổi đã dùng</th></tr></thead>
+    <tbody>{% for k in kinds %}<tr>
+      <td><code>{{ k.code }}</code>{% if k.builtin %} <small class="muted">(hệ thống — mặc định “{{ k.default_label }}”)</small>{% endif %}</td>
+      <td><input name="label_{{ k.code }}" value="{{ k.label }}" required maxlength="40" aria-label="Tên {{ k.code }}"></td>
+      <td><input type="checkbox" name="active_{{ k.code }}" value="1" {{ 'checked' if k.active }} {{ 'disabled' if k.code == 'regular' }} aria-label="Hiện {{ k.code }}">
+        {% if k.code == 'regular' %}<input type="hidden" name="active_regular" value="1">{% endif %}</td>
+      <td><input type="number" name="sort_{{ k.code }}" value="{{ k.sort }}" min="0" max="999" class="narrow" aria-label="Thứ tự {{ k.code }}"></td>
+      <td>{{ usage.get(k.code, 0) }}</td></tr>{% endfor %}</tbody></table></div>
+  {% if w %}<button class="btn primary mt">Lưu loại ca</button>{% endif %}
+  </form>
+  {% if w %}<form method="post" action="{{ url_for('settings_action', action='them-loai-ca') }}" class="row mt">{{ csrf() }}
+    <label class="grow">Thêm loại ca mới <input name="label" required maxlength="40" placeholder="VD: Ca ôn thi"></label>
+    <button class="btn small">Thêm</button></form>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Tên trạng thái buổi học &amp; lý do nghỉ</h2>
+  <form method="post" action="{{ url_for('settings_action', action='nhan') }}">{{ csrf() }}
+  <div class="grid2">
+    <div>{% for k, v in labels.status.items() %}<label>{{ k }} <input name="st_{{ k }}" value="{{ v }}" maxlength="30"></label>{% endfor %}</div>
+    <div>{% for k, v in labels.cancel.items() %}<label>Lý do nghỉ: {{ k }} <input name="cr_{{ k }}" value="{{ v }}" maxlength="30"></label>{% endfor %}</div>
+  </div>
+  {% if w %}<button class="btn primary">Lưu tên hiển thị</button>{% endif %}
+  </form>
+</section>
+{% endblock %}

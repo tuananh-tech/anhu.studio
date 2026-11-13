@@ -1,0 +1,122 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, month_picker, status_badge with context %}{% from '_m.html' import cong_nav, help with context %}
+{% set ym = '%04d-%02d'|format(y, m) %}
+{% block body %}
+{{ cong_nav() }}
+<div class="bar">
+  <div class="left"><h1>Chấm công {{ '%02d'|format(m) }}/{{ y }}</h1>
+    {% if per and per.status == 'locked' %}<span class="badge st-confirmed">Đã chốt</span>{% else %}<span class="badge">Kỳ đang mở</span>{% endif %}</div>
+  <div class="right">
+    {{ month_picker(y, m, 'timesheet_page', {'tab': tab, 'loai': tt}) }}
+    <form method="get" class="inline"><input type="hidden" name="thang" value="{{ ym }}"><input type="hidden" name="tab" value="{{ tab }}">
+      <select name="loai" data-autosubmit aria-label="Loại hình">
+        <option value="center" {{ 'selected' if tt == 'center' }}>Dạy trung tâm</option>
+        <option value="private" {{ 'selected' if tt == 'private' }}>Dạy riêng</option>
+        <option value="all" {{ 'selected' if tt == 'all' }}>Tổng hợp chung</option></select></form>
+    <a class="btn primary" href="{{ url_for('timesheet_export', thang=ym) }}">Xuất Excel mẫu trung tâm</a>
+    <button type="button" class="btn" data-print>In</button>
+  </div>
+</div>
+
+{% call help() %}
+<ul>
+<li>Bảng công chỉ tính các <b>ca đã xác nhận</b>. Ca dự kiến chưa xác nhận không bao giờ được tính.</li>
+<li>Muốn sửa một ca: mở tab <b>Chi tiết từng ca</b> → <b>Sửa</b>. Mọi thay đổi đều cần lý do và được ghi nhật ký.</li>
+<li>Cuối tháng: đối soát với file trung tâm → xử lý chênh lệch → <b>Chốt kỳ</b>. Kỳ đã chốt luôn hiển thị và xuất <b>đúng bản đã chốt</b>.</li>
+</ul>
+{% endcall %}
+{% if view.from_snapshot %}<p class="note">Đang hiển thị <b>bản đã chốt</b> (phiên bản {{ per.version }}, {{ per.locked_at.strftime('%d/%m/%Y %H:%M') }}).
+  Thay đổi danh mục, quy tắc hay đơn giá sau thời điểm chốt không làm thay đổi bảng này. Muốn điều chỉnh: mở kỳ (có lý do) rồi chốt lại.</p>
+{% elif not view.rules.confirmed %}<p class="note">Quy tắc xếp cột (30 PHÚT, DẠY THỬ, ca thêm giờ) đang là <b>đề xuất chưa xác nhận</b> (phiên bản {{ view.rules.version }}).
+  <a href="{{ url_for('settings_section', sec='quy-tac') }}">Xem và xác nhận ở Cài đặt</a>.</p>{% endif %}
+{% if unconfirmed %}<p class="note">Còn <b>{{ unconfirmed }}</b> ca dự kiến đã tới ngày nhưng chưa xác nhận — không được tính vào bảng công. <a href="{{ url_for('sessions_page', thang=ym) }}">Xác nhận</a></p>{% endif %}
+{% if tt != 'center' and not view.from_snapshot %}<p class="note">Đang xem {{ 'dạy riêng' if tt == 'private' else 'tổng hợp chung' }}. File “Xuất Excel mẫu trung tâm” luôn chỉ gồm ca dạy trung tâm.</p>{% endif %}
+
+<nav class="tabs">
+  <a class="{{ 'on' if tab == 'excel' }}" href="{{ url_for('timesheet_page', thang=ym, tab='excel', loai=tt) }}">Theo mẫu Excel</a>
+  <a class="{{ 'on' if tab == 'detail' }}" href="{{ url_for('timesheet_page', thang=ym, tab='detail', loai=tt) }}">Chi tiết từng ca</a>
+</nav>
+
+{% if tab == 'excel' %}
+<div class="tablewrap">
+<table class="xl">
+  <thead>
+    <tr><th class="sticky-col" rowspan="2">NGÀY</th><th rowspan="2">CƠ SỞ</th><th></th><th></th><th colspan="6">SỐ GIỜ DẠY</th><th rowspan="2">GHI CHÚ</th><th rowspan="2">TRUNG TÂM XÁC NHẬN</th></tr>
+    <tr><th>Thời gian Ca học<br><small>(ghi rõ chi tiết giờ học mỗi ca)</small></th><th>Tên Học Viên Hiện Diện</th>
+      <th class="num">1 HV</th><th class="num">2 HV</th><th class="num">3HV</th><th class="num">4HV</th><th class="num">30 PHÚT</th><th>DẠY THỬ<br><small>ghi rõ tên bé, ca ghép hay ca gộp vào lớp có sẵn</small></th></tr>
+  </thead>
+  <tbody>
+  {% for r in view.rows %}{% set c = r.cells %}
+    <tr class="{{ 'empty' if not r.session_ids }} {{ 'weekend' if r.day.weekday() >= 5 }}">
+      <td class="sticky-col" title="{{ r.day|weekday }}">{{ c.A|dm }}</td><td>{{ c.B or '' }}</td>
+      <td class="pre">{{ c.C or '' }}</td><td class="pre">{{ c.D or '' }}</td>
+      {% for k in 'EFGHI' %}<td class="num">{{ c[k] if c[k] is not none else '' }}</td>{% endfor %}
+      <td class="pre">{{ c.J or '' }}</td><td class="pre">{{ c.K or '' }}</td><td>{{ c.L or '' }}</td>
+    </tr>
+  {% endfor %}
+    <tr class="total"><td class="sticky-col"></td><td>TỔNG</td><td></td><td></td>
+      {% for k in 'EFGHI' %}<td class="num">{{ view.totals[k] }}</td>{% endfor %}<td></td><td></td><td></td></tr>
+  </tbody>
+</table>
+</div>
+<p class="hint">Mỗi ngày trong tháng đều có một hàng; ngày không có ca đã xác nhận để trống hoàn toàn (không ghi 0, không ghi “Nghỉ”).
+E–H là <b>số ca</b> có đúng 1/2/3/4 học viên, đếm tự động từ danh sách tên từng ca.</p>
+
+{% if view.supplemental %}
+<section class="card"><h2>Báo cáo bổ sung: ca trên 4 học viên ({{ view.supplemental|length }})</h2>
+  <p class="hint">Không đưa vào cột 4HV của mẫu gốc. Xuất Excel có sheet “Bổ sung”.</p>
+  <ul class="list">{% for s in view.supplemental %}<li><span class="t">{{ s.day|dm }} {{ s.time }}</span><b>{{ s.n }} HV</b><span class="grow">{{ s.attendees|join(', ') }}</span></li>{% endfor %}</ul>
+</section>
+{% endif %}
+{% if view.review %}
+<section class="card"><h2>Cần kiểm tra — chưa tính công ({{ view.review|length }})</h2>
+  <ul class="list">{% for s in view.review %}<li><span class="t">{{ s.day|dm }} {{ s.time }}</span><span class="grow">{{ s.reason }} · {{ s.attendees|join(', ') }}</span>
+    <a class="btn small" href="{{ url_for('actual_detail', aid=s.id) }}">Xử lý</a></li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+{% else %}
+<div class="tablewrap"><table>
+  <thead><tr><th class="sticky-col">Ngày</th><th>Giáo viên</th><th>Cơ sở</th><th>Bắt đầu</th><th>Kết thúc</th><th>Học viên</th><th class="num">Số HV</th><th class="num">Phút</th><th>Loại ca</th><th>Trạng thái</th><th>Cột bảng công</th><th>Nguồn</th><th></th></tr></thead>
+  <tbody>{% for d in view.detail %}
+    <tr><td class="sticky-col">{{ d.day|dmy }}</td><td>{{ d.teacher }}</td><td>{{ d.location }}</td><td>{{ d.start|hm }}</td><td>{{ d.end|hm }}</td>
+      <td>{{ d.attendees|join(', ') }}</td><td class="num">{{ d.n }}</td><td class="num">{{ d.minutes or '' }}</td><td>{{ d.kind|kind }}</td>
+      <td>{{ status_badge(d.status) }}</td><td>{{ {'SUPP':'Bổ sung (>4 HV)'}.get(d.column, d.column) or ('— ' ~ d.not_counted_reason) }}</td>
+      <td>{{ {'schedule':'Lịch','manual':'Thêm tay','import_legacy':'Import'}.get(d.source, d.source) }}</td>
+      <td>{% if not view.from_snapshot %}<a class="btn small" href="{{ url_for('actual_detail', aid=d.id) }}">Sửa</a>{% else %}<a class="btn small" href="{{ url_for('actual_detail', aid=d.id) }}">Xem</a>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="13" class="muted">Chưa có buổi dạy nào trong tháng.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endif %}
+
+<div class="grid2 mt">
+<section class="card">
+  <h2>Tiền công (dạy trung tâm)</h2>
+  {% if pay %}
+    {% if pay.by_category %}
+    <table><thead><tr><th>Nhóm</th><th class="num">Số ca</th><th>Thành tiền (đơn giá đã xác nhận)</th></tr></thead><tbody>
+      {% for cat, v in pay.by_category.items() %}<tr><td>{{ v.label }}</td><td class="num">{{ v.count }}</td><td>{{ v.amount|money if v.amount else '—' }}</td></tr>{% endfor %}
+    </tbody></table>
+    {% endif %}
+    {% if pay.complete and pay.by_category %}<p>Tổng: <b>{{ pay.total|money }}</b> {{ '(đã chốt)' if per and per.status == 'locked' else '(ước tính)' }}</p>
+    {% elif pay.by_category %}<p class="note">Không hiển thị tổng tiền: <b>{{ pay.missing|length }}</b> ca chưa có đơn giá đã xác nhận. <a href="{{ url_for('settings_section', sec='don-gia') }}">Cấu hình đơn giá</a></p>{% endif %}
+  {% else %}<p class="muted">Chọn “Dạy trung tâm” để xem tiền công trung tâm.</p>{% endif %}
+</section>
+<section class="card">
+  <h2>Chốt kỳ</h2>
+  {% if per and per.status == 'locked' %}
+    <p>Đã chốt lúc {{ per.locked_at.strftime('%d/%m/%Y %H:%M') }} · phiên bản {{ per.version }}<br><small class="muted">SHA-256: {{ per.export_sha256 }}</small></p>
+    <a class="btn" href="{{ url_for('timesheet_locked_file', thang=ym) }}">Tải file đã chốt</a>
+    <a class="btn small" href="{{ url_for('timesheet_periods', thang=ym) }}">Lịch sử phiên bản</a>
+    {% if g.owner.can_write %}
+    <form method="post" action="{{ url_for('timesheet_action', action='mo') }}">{{ csrf() }}<input type="hidden" name="y" value="{{ y }}"><input type="hidden" name="m" value="{{ m }}">
+      <label>Lý do mở kỳ (bắt buộc) <input name="reason" required></label><button class="btn danger small">Mở kỳ để điều chỉnh</button></form>
+    {% endif %}
+  {% elif g.owner.can_write %}
+    {% if per and per.last_unlock_reason %}<p class="hint">Lần mở kỳ gần nhất: {{ per.last_unlock_reason }}</p>{% endif %}
+    <form method="post" action="{{ url_for('timesheet_action', action='chot') }}" data-confirm="Chốt kỳ {{ m }}/{{ y }}? Sau khi chốt, mọi sửa đổi buổi dạy trong tháng sẽ bị khóa.">{{ csrf() }}
+      <input type="hidden" name="y" value="{{ y }}"><input type="hidden" name="m" value="{{ m }}">
+      <p class="hint">Lưu snapshot bảng công, người chốt, thời điểm và mã băm file xuất. Nên đối soát xong trước khi chốt.</p>
+      <button class="btn champ">Chốt kỳ {{ '%02d'|format(m) }}/{{ y }}</button></form>
+  {% endif %}
+</section>
+</div>
+{% endblock %}

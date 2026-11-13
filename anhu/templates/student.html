@@ -1,0 +1,103 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, status_badge, type_tag with context %}
+{% set st = s.student %}
+{% block body %}
+<div class="bar"><div class="left"><h1>{{ st.display_name }}</h1>{% if st.code %}<span class="badge">{{ st.code }}</span>{% endif %}
+  {% if st.archived_at %}<span class="badge st-void">Đã lưu trữ {{ st.archived_at.strftime('%d/%m/%Y') }}</span>{% endif %}</div>
+  <a class="btn small" href="{{ url_for('students_page') }}">← Học viên</a></div>
+<section class="kpis">
+  <div class="kpi"><b>{{ s.total_sessions }}</b><span>Buổi đã học (đã xác nhận)</span></div>
+  <div class="kpi"><b>{{ '%.1f'|format(s.total_minutes / 60) }}</b><span>Tổng giờ</span></div>
+  <div class="kpi"><b>{{ s.cancelled|length }}</b><span>Buổi nghỉ/hủy (60 ngày)</span></div>
+  <div class="kpi"><b>{{ s.makeup|length }}</b><span>Buổi dạy bù</span></div>
+  <div class="kpi"><b>{{ s.unpaid|money }}</b><span>Dạy riêng còn phải thu</span></div>
+</section>
+<div class="grid2">
+<section class="card">
+  <h2>Hồ sơ</h2>
+  {% if g.owner.can_write %}
+  <form method="post">{{ csrf() }}<input type="hidden" name="act" value="profile">
+    <div class="row"><label class="grow">Tên hiển thị <input name="display_name" value="{{ st.display_name }}" required></label>
+      <label>Mã học viên <input name="code" value="{{ st.code or '' }}" maxlength="30"></label></div>
+    <div class="row">
+      <label>Lớp / nhóm <input name="class_group" value="{{ st.class_group or '' }}"></label>
+      <label>Môn <input name="subject" value="{{ st.subject or '' }}"></label>
+    </div>
+    <div class="row">
+      <label>Ngày bắt đầu <input type="date" name="start_date" value="{{ st.start_date.isoformat() if st.start_date }}"></label>
+      <label>Trạng thái <select name="status">{% for k, v in [('active','Đang học'),('paused','Tạm nghỉ'),('stopped','Ngừng học')] %}<option value="{{ k }}" {{ 'selected' if st.status == k }}>{{ v }}</option>{% endfor %}</select></label>
+    </div>
+    <label>Ghi chú <input name="notes" value="{{ st.notes or '' }}"></label>
+    <button class="btn">Lưu hồ sơ</button>
+  </form>
+  <form method="post" class="mt" data-confirm="{{ 'Khôi phục học viên này?' if st.archived_at else 'Lưu trữ học viên? Hồ sơ sẽ ẩn khỏi danh sách chọn, lịch sử giữ nguyên.' }}">{{ csrf() }}
+    <input type="hidden" name="act" value="{{ 'unarchive' if st.archived_at else 'archive' }}">
+    <button class="btn small {{ '' if st.archived_at else 'danger' }}">{{ 'Khôi phục hồ sơ' if st.archived_at else 'Lưu trữ học viên (đã nghỉ hẳn)' }}</button></form>
+  {% endif %}
+  <h3>Nơi học</h3>
+  <ul>{% for e in s.enrollments %}<li>{{ e.location_name }} · {{ 'Trung tâm' if e.teaching_type == 'center' else 'Dạy riêng' }}{{ ' · ' ~ e.class_group if e.class_group }}</li>{% else %}<li class="muted">Chưa gắn nơi học.</li>{% endfor %}</ul>
+  {% if g.owner.can_write %}
+  <form method="post" class="row">{{ csrf() }}<input type="hidden" name="act" value="enroll">
+    <label class="grow">Thêm nơi học <select name="location_id" required><option value="">— chọn —</option>
+      {% for l in locs %}<option value="{{ l.id }}">{{ l.name }}{{ ' (dạy riêng)' if l.kind == 'private_place' }}</option>{% endfor %}</select></label>
+    <label>Lớp <input name="class_group"></label><button class="btn small">Thêm</button>
+  </form>
+  {% endif %}
+</section>
+<section class="card" id="lien-he">
+  <h2>Người liên hệ</h2>
+  <ul class="list">{% for ct in contacts %}<li><span class="grow"><b>{{ ct.name }}</b>{{ ' · ' ~ ct.relation if ct.relation }}{% if ct.is_primary %} <span class="badge st-confirmed">chính</span>{% endif %}
+      <br><small>{{ ct.phone or '' }}{{ ' · ' ~ ct.email if ct.email }}{{ ' · ' ~ ct.notes if ct.notes }}</small></span>
+    {% if g.owner.can_write %}<details class="inline-edit"><summary>Sửa</summary>
+      <form method="post">{{ csrf() }}<input type="hidden" name="act" value="contact"><input type="hidden" name="contact_id" value="{{ ct.id }}">
+        <label>Tên <input name="name" value="{{ ct.name }}" required></label><label>Quan hệ <input name="relation" value="{{ ct.relation or '' }}"></label>
+        <label>Điện thoại <input name="phone" value="{{ ct.phone or '' }}" inputmode="tel"></label><label>Email <input type="email" name="email" value="{{ ct.email or '' }}"></label>
+        <label>Ghi chú <input name="notes" value="{{ ct.notes or '' }}"></label>
+        <label class="inline"><input type="checkbox" name="is_primary" value="1" {{ 'checked' if ct.is_primary }}> Liên hệ chính</label>
+        <button class="btn small primary">Lưu</button></form>
+      <form method="post" class="mt">{{ csrf() }}<input type="hidden" name="act" value="contact-archive"><input type="hidden" name="contact_id" value="{{ ct.id }}">
+        <button class="btn small danger">Ẩn liên hệ</button></form></details>{% endif %}</li>
+  {% else %}<li class="muted">Chưa có người liên hệ.</li>{% endfor %}</ul>
+  {% if g.owner.can_write %}<details class="mt"><summary>+ Thêm người liên hệ</summary>
+    <form method="post">{{ csrf() }}<input type="hidden" name="act" value="contact">
+      <div class="row"><label class="grow">Tên <input name="name" required></label><label>Quan hệ <input name="relation" placeholder="Mẹ, bố…"></label></div>
+      <div class="row"><label>Điện thoại <input name="phone" inputmode="tel"></label><label>Email <input type="email" name="email"></label></div>
+      <label>Ghi chú <input name="notes"></label>
+      <label class="inline"><input type="checkbox" name="is_primary" value="1"> Liên hệ chính</label>
+      <p class="hint">Chỉ lưu thông tin thực sự cần cho việc dạy. Thông tin chỉ bạn (và người được bạn chia sẻ) xem được.</p>
+      <button class="btn small primary">Thêm</button></form></details>{% endif %}
+
+  <h3>Lớp / nhóm</h3>
+  <ul class="list">{% for gm in groups %}<li class="{{ 'archived' if gm.left_on }}"><span class="grow">{{ gm.name }} <small class="muted">{{ gm.joined_on|dmy }} → {{ gm.left_on|dmy if gm.left_on else 'nay' }}</small></span>
+    {% if g.owner.can_write and not gm.left_on %}<form method="post" class="inline">{{ csrf() }}<input type="hidden" name="act" value="leave"><input type="hidden" name="member_id" value="{{ gm.id }}">
+      <button class="btn small">Rời lớp</button></form>{% endif %}</li>
+  {% else %}<li class="muted">Chưa thuộc lớp/nhóm nào.</li>{% endfor %}</ul>
+  {% if g.owner.can_write and all_groups %}<form method="post" class="row">{{ csrf() }}<input type="hidden" name="act" value="group">
+    <label class="grow">Thêm vào <select name="group_id" required>{% for gr in all_groups %}<option value="{{ gr.id }}">{{ gr.name }}</option>{% endfor %}</select></label>
+    <label>Từ ngày <input type="date" name="joined_on"></label><button class="btn small">Thêm</button></form>{% endif %}
+</section>
+</div>
+<div class="grid2">
+<section class="card">
+  <h2>Lịch dự kiến</h2>
+  <ul class="list">{% for p in s.planned if p.status in ('planned', 'needs_review') %}
+    <li><span class="t">{{ p.session_date|dmy }} {{ p.start_time|hm }}</span>{{ type_tag(p.teaching_type) }}<a href="{{ url_for('planned_detail', pid=p.id) }}">Mở</a></li>
+  {% else %}<li class="muted">Không có ca dự kiến gắn hồ sơ này.</li>{% endfor %}</ul>
+  {% if s.cancelled or s.rescheduled %}<h3>Nghỉ / dời</h3>
+  <ul class="list">{% for p in s.cancelled + s.rescheduled %}<li><span class="t">{{ p.session_date|dmy }}</span>{{ status_badge(p.status) }}{{ CANCEL_REASONS.get(p.cancel_reason, '') }}</li>{% endfor %}</ul>{% endif %}
+</section>
+</div>
+<section class="card">
+  <h2>Lịch sử buổi học thực tế</h2>
+  {% if s.history %}
+  <div class="tablewrap"><table>
+    <thead><tr><th>Ngày</th><th>Giờ</th><th>Cơ sở</th><th>Loại ca</th><th>Trạng thái</th><th>Thanh toán</th><th></th></tr></thead>
+    <tbody>{% for h in s.history %}
+      <tr><td>{{ h.session_date|dmy }}</td><td>{{ h.start_time|hm }}–{{ h.end_time|hm }}</td><td>{{ type_tag(h.teaching_type) }} {{ h.location_label }}</td>
+        <td>{{ (h.session_kind)|kind }}</td><td>{{ status_badge(h.status) }}</td>
+        <td>{% if h.teaching_type == 'private' %}{{ {'na':'Chưa có giá','unpaid':'Chưa thu','partial':'Một phần','paid':'Đã thu'}[h.payment_status] }}{% endif %}</td>
+        <td><a class="btn small" href="{{ url_for('actual_detail', aid=h.id) }}">Mở</a></td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">Chưa có buổi học nào được gắn với hồ sơ này. (Buổi import từ Excel cũ chỉ có tên — cần gắn hồ sơ khi sửa buổi dạy.)</p>{% endif %}
+</section>
+{% endblock %}

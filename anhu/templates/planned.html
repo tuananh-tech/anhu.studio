@@ -1,0 +1,113 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, attendee_picker, location_select, kind_select, status_badge, type_tag with context %}
+{% set ALLK = ['regular', 'trial', 'extra', 'makeup'] %}
+{% block body %}
+<div class="bar">
+  <div class="left"><h1>Ca {{ p.session_date|weekday }} {{ p.session_date|dmy }} · {{ p.start_time|hm }}–{{ p.end_time|hm }}</h1></div>
+  <div class="right">{{ type_tag(p.teaching_type) }} {{ status_badge(p.disp) }}
+    <a class="btn small" href="{{ url_for('calendar', ngay=p.session_date.isoformat()) }}">← Lịch</a></div>
+</div>
+<div class="grid2">
+<section class="card">
+  <dl class="kv">
+    <dt>Cơ sở / địa điểm</dt><dd>{{ p.location_name }}</dd>
+    <dt>Loại ca</dt><dd>{{ (p.session_kind)|kind }}</dd>
+    {% if p.class_group %}<dt>Lớp / nhóm</dt><dd>{{ p.class_group }}</dd>{% endif %}
+    <dt>Học viên dự kiến</dt><dd>{{ p.expected_students|map(attribute='name')|join(', ') or '—' }}</dd>
+    <dt>Nguồn</dt><dd>{{ 'Lịch lặp' if p.series_id else 'Ca ngoài lịch' }}{{ ' · đã sửa riêng' if p.is_exception and p.series_id }}</dd>
+    {% if p.cancel_reason %}<dt>Lý do nghỉ</dt><dd>{{ CANCEL_REASONS[p.cancel_reason] }}{{ ' — ' ~ p.cancel_note if p.cancel_note }}</dd>{% endif %}
+    {% if p.conflict_override_reason %}<dt>Ngoại lệ trùng giờ</dt><dd>{{ p.conflict_override_reason }}</dd>{% endif %}
+    {% if p.notes %}<dt>Ghi chú</dt><dd>{{ p.notes }}</dd>{% endif %}
+  </dl>
+  {% for l in linked if l.id != p.id %}<p class="hint">Liên kết: <a href="{{ url_for('planned_detail', pid=l.id) }}">ca {{ l.session_date|dmy }} {{ l.start_time|hm }}</a> ({{ STATUS_LABEL[l.status] }})</p>{% endfor %}
+  {% if p.actual_id %}<p><a class="btn" href="{{ url_for('actual_detail', aid=p.actual_id) }}">Xem buổi dạy thực tế</a></p>{% endif %}
+</section>
+
+{% if g.owner.can_write and p.status in ('planned', 'needs_review') %}
+<section class="card">
+  <h2>Xác nhận đã dạy</h2>
+  <form method="post" action="{{ url_for('planned_action', pid=p.id, action='xac-nhan') }}">{{ csrf() }}
+    {{ attendee_picker(p.expected_students, students) }}
+    <details><summary>Điều chỉnh giờ / loại ca / ghi chú</summary>
+      <div class="row">
+        <label>Bắt đầu <input type="time" name="start" value="{{ p.start_time|hm }}"></label>
+        <label>Kết thúc <input type="time" name="end" value="{{ p.end_time|hm }}"></label>
+        <label>Loại ca {{ kind_select(ALLK, p.session_kind) }}</label>
+      </div>
+      <label>Ghi chú (ca ghép / gộp lớp…) <input name="notes" value="{{ p.notes or '' }}"></label>
+      <label>Lý do ngoại lệ nếu trùng giờ <input name="override_reason"></label>
+    </details>
+    <button class="btn primary wide">Xác nhận đã dạy</button>
+  </form>
+</section>
+{% endif %}
+</div>
+
+{% if g.owner.can_write %}
+<div class="grid2">
+{% if p.status in ('planned', 'needs_review') %}
+<section class="card">
+  <details><summary>Nghỉ / hủy</summary>
+  <form method="post" action="{{ url_for('planned_action', pid=p.id, action='huy') }}">{{ csrf() }}
+    <label>Lý do <select name="cancel_reason" required><option value="">— chọn —</option>
+      {% for k, v in CANCEL_REASONS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+    <label>Ghi chú <input name="cancel_note"></label>
+    <p class="hint">Mặc định ca nghỉ/hủy <b>không tính công</b> (quy tắc tính công khi hủy cấu hình riêng ở Cài đặt).</p>
+    <button class="btn danger">Đánh dấu nghỉ / hủy</button>
+  </form></details>
+</section>
+<section class="card">
+  <details><summary>Đổi giờ / địa điểm / học viên (chỉ ca này)</summary>
+  <form method="post" action="{{ url_for('planned_action', pid=p.id, action='sua') }}">{{ csrf() }}
+    <div class="row">
+      <label>Bắt đầu <input type="time" name="start" value="{{ p.start_time|hm }}"></label>
+      <label>Kết thúc <input type="time" name="end" value="{{ p.end_time|hm }}"></label>
+    </div>
+    <label>Cơ sở {{ location_select(locs, p.location_id) }}</label>
+    <label>Loại ca (dạy thử / thêm giờ…) {{ kind_select(ALLK, p.session_kind) }}</label>
+    <label><input type="checkbox" name="edit_students" value="1"> Đổi danh sách học viên dự kiến</label>
+    <div class="checks">{% for s in students %}<label><input type="checkbox" name="student_ids" value="{{ s.id }}" {{ 'checked' if p.expected_students|selectattr('student_id', 'equalto', s.id|string)|list }}> {{ s.display_name }}</label>{% endfor %}</div>
+    <label>Tên khác <input name="extra_names" value="{{ p.expected_students|rejectattr('student_id')|map(attribute='name')|join(', ') }}"></label>
+    <label>Ghi chú <input name="notes" value="{{ p.notes or '' }}"></label>
+    <label>Lý do ngoại lệ nếu trùng giờ <input name="override_reason"></label>
+    <p class="hint">Chỉ đổi ca ngày {{ p.session_date|dmy }}; các tuần trước/sau giữ nguyên. Muốn đổi cả chuỗi: vào Lịch lặp.</p>
+    <button class="btn">Lưu ca này</button>
+  </form></details>
+</section>
+<section class="card">
+  <details><summary>Dời lịch sang ngày khác</summary>
+  <form method="post" action="{{ url_for('planned_action', pid=p.id, action='doi') }}">{{ csrf() }}
+    <div class="row">
+      <label>Ngày mới <input type="date" name="day" required></label>
+      <label>Bắt đầu <input type="time" name="start" value="{{ p.start_time|hm }}" required></label>
+      <label>Kết thúc <input type="time" name="end" value="{{ p.end_time|hm }}" required></label>
+    </div>
+    <label>Cơ sở {{ location_select(locs, None, required=false) }}</label>
+    <label>Lý do ngoại lệ nếu trùng giờ <input name="override_reason"></label>
+    <button class="btn">Dời lịch</button>
+  </form></details>
+</section>
+{% endif %}
+{% if p.status == 'cancelled' %}
+<section class="card">
+  <h2>Dạy bù</h2>
+  <form method="post" action="{{ url_for('planned_action', pid=p.id, action='bu') }}">{{ csrf() }}
+    <div class="row">
+      <label>Ngày dạy bù <input type="date" name="day" required></label>
+      <label>Bắt đầu <input type="time" name="start" value="{{ p.start_time|hm }}" required></label>
+      <label>Kết thúc <input type="time" name="end" value="{{ p.end_time|hm }}" required></label>
+    </div>
+    <label>Lý do ngoại lệ nếu trùng giờ <input name="override_reason"></label>
+    <p class="hint">Mỗi ca hủy chỉ có tối đa một ca bù — không tính công hai lần.</p>
+    <button class="btn primary">Tạo ca dạy bù</button>
+  </form>
+  <form method="post" action="{{ url_for('planned_action', pid=p.id, action='khoi-phuc') }}" data-confirm="Khôi phục ca này về Dự kiến?">{{ csrf() }}
+    <button class="btn small">Khôi phục (hủy nhầm)</button></form>
+</section>
+{% endif %}
+</div>
+{% endif %}
+
+<section class="card"><details><summary>Nhật ký thay đổi ({{ log|length }})</summary>
+  <ul class="list log">{% for l in log %}<li>{{ l.at.strftime('%d/%m/%Y %H:%M') }} · {{ l.actor or 'hệ thống' }} · {{ l.action }}{{ ' · ' ~ l.reason if l.reason }}</li>{% endfor %}</ul>
+</details></section>
+{% endblock %}

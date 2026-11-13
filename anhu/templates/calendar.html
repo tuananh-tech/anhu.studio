@@ -1,0 +1,58 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf with context %}{% from '_m.html' import lich_nav, help with context %}
+{% block body %}
+{{ lich_nav() }}
+<div class="bar">
+  <div class="left">
+    <h1>Lịch dạy</h1>
+    <a class="btn small" href="{{ url_for('calendar', che_do=mode, ngay=prev_d.isoformat(), loai=tt or '') }}" aria-label="Trước">‹</a>
+    <a class="btn small" href="{{ url_for('calendar', che_do=mode, loai=tt or '') }}">Hôm nay</a>
+    <a class="btn small" href="{{ url_for('calendar', che_do=mode, ngay=next_d.isoformat(), loai=tt or '') }}" aria-label="Sau">›</a>
+    <b>{% if mode == 'thang' %}Tháng {{ d.month }}/{{ d.year }}{% elif mode == 'ngay' %}{{ d|weekday }} {{ d|dmy }}{% else %}Tuần {{ days[0]|dm }} – {{ days[-1]|dmy }}{% endif %}</b>
+  </div>
+  <div class="right">
+    <nav class="tabs flat" aria-label="Chế độ xem">
+      {% for k, lab in [('ngay','Ngày'),('tuan','Tuần'),('thang','Tháng')] %}<a class="{{ 'on' if mode == k }}" href="{{ url_for('calendar', che_do=k, ngay=d.isoformat(), loai=tt or '') }}">{{ lab }}</a>{% endfor %}
+    </nav>
+    <form method="get" class="inline"><input type="hidden" name="che_do" value="{{ mode }}"><input type="hidden" name="ngay" value="{{ d.isoformat() }}">
+      <select name="loai" data-autosubmit aria-label="Loại hình">
+        <option value="">Tất cả loại hình</option>
+        <option value="center" {{ 'selected' if tt == 'center' }}>Dạy trung tâm</option>
+        <option value="private" {{ 'selected' if tt == 'private' }}>Dạy riêng</option>
+      </select></form>
+  </div>
+</div>
+<div class="bar">
+  <div class="legend">
+    <span class="tag tt-c">Trung tâm</span><span class="tag tt-p">Dạy riêng</span>
+    <span class="badge">Dự kiến</span><span class="badge st-pending">Chờ xác nhận</span><span class="badge st-confirmed">Đã dạy</span>
+    <span class="badge st-cancelled">Nghỉ/hủy</span><span class="badge st-rescheduled">Dời lịch</span><span class="badge st-needs_review">Cần kiểm tra</span>
+  </div>
+  <div class="right">
+    <a class="btn small" href="{{ url_for('templates_page') }}">Lịch lặp</a>
+    <a class="btn small" href="{{ url_for('sessions_page') }}#them">+ Ca ngoài lịch</a>
+    {% if mode == 'tuan' and g.owner.can_write %}
+    <form method="post" action="{{ url_for('copy_week') }}" class="inline" data-confirm="Sao chép các ca NGOÀI lịch lặp của tuần này sang tuần sau?">{{ csrf() }}
+      <input type="hidden" name="tuan" value="{{ week_a.isoformat() }}"><button class="btn small">Sao chép tuần</button></form>
+    {% endif %}
+  </div>
+</div>
+<p class="hint">Ca trên lịch là <b>dự kiến</b> — chỉ thành công khi bấm vào ca và xác nhận. Không tự đánh dấu đã dạy khi tới ngày.</p>
+
+<div class="cal {{ 'month' if mode == 'thang' else ('day1' if mode == 'ngay' else 'week') }}">
+  {% if mode != 'ngay' %}{% for i in range(7) %}<div class="wh">{{ WEEKDAY_LABEL[i] }}</div>{% endfor %}{% endif %}
+  {% for day in days %}
+  <div class="day {{ 'today' if day == today }} {{ 'out' if mode == 'thang' and day.month != d.month }}">
+    <div class="dh"><span>{{ day|weekday }}</span><b>{{ day|dm }}</b></div>
+    {% for p in by_day[day] %}
+    <a class="ev {{ 'p' if p.teaching_type == 'private' }} s-{{ p.disp }}" href="{{ url_for('planned_detail', pid=p.id) }}"
+       title="{{ STATUS_LABEL[p.disp] }} · {{ (p.session_kind)|kind }}">
+      <b>{{ p.start_time|hm }}–{{ p.end_time|hm }}</b>
+      <span>{{ p.location_name }}{% if p.session_kind != 'regular' %} · {{ (p.session_kind)|kind }}{% endif %}<br>
+      {{ STATUS_LABEL[p.disp] }}{% if p.actual_n %} · {{ p.actual_n }} HV{% endif %}</span>
+    </a>
+    {% else %}{% if mode != 'thang' %}<p class="hint">Không có ca.</p>{% endif %}
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

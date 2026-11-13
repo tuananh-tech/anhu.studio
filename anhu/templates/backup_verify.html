@@ -1,0 +1,21 @@
+{% extends 'base.html' %}{% from '_m.html' import settings_back with context %}
+{% block body %}
+{{ settings_back() }}
+<h1>Kết quả kiểm tra: {{ filename }}</h1>
+{% set mf = rep.manifest %}
+<section class="card">
+  <p class="flash ok">File nguyên vẹn: mã băm SHA-256 khớp, số dòng của từng bảng khớp với manifest.</p>
+  {% if rep.newer_migrations %}<p class="flash error">Bản sao lưu được tạo trên phiên bản CSDL mới hơn máy chủ này ({{ rep.newer_migrations|join(', ') }}). Hãy cập nhật ứng dụng trước khi khôi phục.</p>{% endif %}
+  <dl class="kv">
+    <dt>Tạo lúc</dt><dd>{{ mf.created_at }}</dd>
+    <dt>Của tài khoản</dt><dd>{{ mf.owner.display_name }} ({{ mf.owner.email }})</dd>
+    <dt>Phiên bản ứng dụng</dt><dd>{{ mf.app_version }}</dd>
+    <dt>Migration</dt><dd>{{ mf.migrations|join(', ') }}</dd>
+    <dt>Kỳ đã chốt</dt><dd>{% for k, v in mf.locked_exports.items() %}{{ k }} <small class="muted">({{ v[:10] }}…)</small>{{ ', ' if not loop.last }}{% else %}không có{% endfor %}</dd>
+    <dt>Khôi phục được vào tài khoản này?</dt><dd>{{ 'Có — tài khoản đang trống' if rep.empty_target and rep.restorable else 'Không — tài khoản đã có dữ liệu hoặc phiên bản chưa phù hợp' }}</dd>
+  </dl>
+  <h2>Số dòng theo bảng</h2>
+  <div class="tablewrap short"><table><thead><tr><th>Bảng</th><th class="num">Số dòng</th></tr></thead>
+    <tbody>{% for t, n in mf.counts.items() if n %}<tr><td>{{ t }}</td><td class="num">{{ n }}</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endblock %}

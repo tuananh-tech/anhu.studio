@@ -1,0 +1,68 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, help, settings_back with context %}
+{% block body %}
+{{ settings_back() }}
+<h1>{{ title }}</h1>
+{% call help() %}
+<ul>
+<li>Tiền công <b>chỉ được tính</b> khi đơn giá đã được bấm <b>Xác nhận</b>. Nếu thiếu đơn giá cho bất kỳ ca nào, tổng tiền sẽ không hiển thị, để tránh đưa ra một con số sai.</li>
+<li><b>Đổi giá:</b> bấm “Kết thúc” trên giá cũ, chọn ngày cuối, rồi thêm giá mới bắt đầu từ ngày kế tiếp. Không sửa trực tiếp số tiền của giá cũ, để giữ đúng lịch sử.</li>
+<li>Nhập nhầm thì bấm <b>Lưu trữ</b>: giá đó sẽ không còn được dùng để tính tiền.</li>
+<li>Kỳ đã chốt giữ nguyên số tiền của lúc chốt, dù sau này có đổi đơn giá.</li>
+</ul>
+{% endcall %}
+{% set w = g.owner.can_write %}
+<section class="card">
+  {% if rates %}
+  <div class="tablewrap"><table>
+    <thead><tr><th>Loại hình</th><th>Nhóm</th><th>Trung tâm / HV</th><th>Đơn giá</th><th>Hiệu lực</th><th>Trạng thái</th><th>Ghi chú</th><th></th></tr></thead>
+    <tbody>{% for r in rates %}
+      <tr class="{{ 'empty' if r.archived_at }}"><td>{{ 'Trung tâm' if r.teaching_type == 'center' else 'Dạy riêng' }}</td><td>{{ CATEGORY_LABEL.get(r.category, 'Giá buổi dạy riêng (mỗi HV)') }}</td>
+        <td>{{ r.center_name or r.student_name or 'chung' }}</td><td>{{ r.amount|money }}</td>
+        <td>{{ r.valid_from|dmy }} → {{ r.valid_to|dmy if r.valid_to else '…' }}</td>
+        <td>{% if r.archived_at %}<span class="badge st-void">Đã lưu trữ</span>{% else %}<span class="badge {{ 'st-confirmed' if r.confirmed else 'st-pending' }}">{{ 'Đã xác nhận' if r.confirmed else 'Chưa xác nhận' }}</span>{% endif %}</td>
+        <td>{{ r.note or '' }}</td>
+        <td class="actions">{% if w %}
+          {% if not r.archived_at %}
+          <form method="post" action="{{ url_for('settings_action', action='xac-nhan-don-gia') }}" class="inline">{{ csrf() }}
+            <input type="hidden" name="rate_id" value="{{ r.id }}"><input type="hidden" name="confirmed" value="{{ '0' if r.confirmed else '1' }}">
+            <button class="btn small {{ '' if r.confirmed else 'primary' }}">{{ 'Bỏ xác nhận' if r.confirmed else 'Xác nhận' }}</button></form>
+          <details class="inline-edit"><summary>Kết thúc</summary>
+            <form method="post" action="{{ url_for('settings_action', action='ket-thuc-don-gia') }}" class="row">{{ csrf() }}
+              <input type="hidden" name="rate_id" value="{{ r.id }}"><label>Ngày cuối áp dụng <input type="date" name="valid_to" value="{{ r.valid_to.isoformat() if r.valid_to else '' }}"></label>
+              <button class="btn small">Lưu</button></form></details>
+          {% endif %}
+          <form method="post" action="{{ url_for('settings_action', action='luu-tru-don-gia') }}" class="inline">{{ csrf() }}
+            <input type="hidden" name="rate_id" value="{{ r.id }}"><input type="hidden" name="archived" value="{{ '0' if r.archived_at else '1' }}">
+            <button class="btn small">{{ 'Khôi phục' if r.archived_at else 'Lưu trữ' }}</button></form>
+        {% endif %}</td></tr>
+    {% endfor %}</tbody></table></div>
+  {% else %}<p class="muted">Chưa có đơn giá. Tiền công sẽ không hiển thị cho tới khi có đơn giá đã xác nhận.</p>{% endif %}
+</section>
+{% if w %}
+<section class="card">
+  <h2>Thêm đơn giá</h2>
+  <form method="post" action="{{ url_for('settings_action', action='don-gia') }}">{{ csrf() }}
+    <div class="row">
+      <label>Loại hình <select name="teaching_type"><option value="center">Dạy trung tâm</option><option value="private">Dạy riêng</option></select></label>
+      <label>Nhóm <select name="category">{% for k, v in CATEGORY_LABEL.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+        <option value="private_session">Giá buổi dạy riêng (mỗi HV)</option></select></label>
+      <label>Trung tâm <select name="center_id"><option value="">Chung</option>{% for c in centers %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></label>
+      <label>Học viên (dạy riêng) <select name="student_id"><option value="">Chung</option>{% for s in students %}<option value="{{ s.id }}">{{ s.display_name }}</option>{% endfor %}</select></label>
+    </div>
+    <div class="row">
+      <label>Số tiền (₫) <input type="number" name="amount" min="0" step="1000" required></label>
+      <label>Từ ngày <input type="date" name="valid_from" value="{{ today.replace(day=1).isoformat() }}" required></label>
+      <label>Đến ngày (để trống = chưa kết thúc) <input type="date" name="valid_to"></label>
+      <label class="grow">Ghi chú / nguồn (VD: hợp đồng 2026) <input name="note"></label>
+    </div>
+    <label class="inline"><input type="checkbox" name="confirmed" value="1"> Đơn giá đã được xác minh (dùng để tính tiền)</label>
+    <button class="btn primary">Thêm</button>
+  </form>
+  <form method="post" action="{{ url_for('settings_action', action='don-gia-goi-y') }}" class="row mt">{{ csrf() }}
+    <label>Áp dụng từ <input type="date" name="valid_from" value="{{ today.replace(day=1).isoformat() }}"></label>
+    <label>Trung tâm <select name="center_id"><option value="">Chung</option>{% for c in centers %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></label>
+    <button class="btn small">Thêm 4 đơn giá gợi ý từ Excel cũ (1 HV 200.000 · 2 HV 200.000 · 3HV 250.000 · 4HV 250.000, CHƯA xác nhận)</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

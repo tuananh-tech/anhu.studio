@@ -1,0 +1,37 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf with context %}{% from '_m.html' import cong_nav, help with context %}
+{% block body %}
+{{ cong_nav() }}
+<div class="bar"><h1>Đối soát với trung tâm</h1>
+  <div class="right"><a class="btn small" href="{{ url_for('blank_template') }}">Tải mẫu Excel trống</a>
+  <a class="btn small" href="{{ url_for('timesheet_export') }}">Tải bảng công tháng (mẫu trung tâm)</a></div></div>
+<p class="hint">Quy trình: tải file XLSX của trung tâm → xem trước &amp; ghép cột → chạy đối chiếu → duyệt từng chênh lệch → xuất biên bản.
+File của trung tâm được lưu nguyên vẹn (kèm mã SHA-256) và <b>không bao giờ</b> tự ghi đè dữ liệu chấm công của bạn.
+Số học viên phía bạn lấy từ danh sách đã xác nhận — không cần nhập lại.</p>
+
+{% if g.owner.can_write %}
+<section class="card">
+  <h2>Tải file trung tâm</h2>
+  <form method="post" enctype="multipart/form-data">{{ csrf() }}
+    <div class="row">
+      <label>Tháng đối soát <input type="month" name="thang" value="{{ '%04d-%02d'|format(today.year, today.month) }}" required></label>
+      <label>Trung tâm <select name="center_id"><option value="">— tất cả ca dạy trung tâm —</option>
+        {% for c in centers %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></label>
+      <label class="grow">File .xlsx <input type="file" name="file" accept=".xlsx" required></label>
+    </div>
+    <button class="btn primary">Tải lên &amp; xem trước</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Các lần đối soát</h2>
+  {% if imps %}
+  <ul class="list">{% for i in imps %}
+    <li><span class="t">{{ '%02d'|format(i.month) }}/{{ i.year }}</span>
+      <span class="grow">{{ i.filename }} · {{ i.center_name or 'mọi trung tâm' }} · tải lúc {{ i.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+      {% if i.status == 'uploaded' %}<span class="badge st-pending">Chưa ghép cột</span>{% elif i.pending %}<span class="badge st-needs_review">{{ i.pending }} chờ duyệt</span>{% else %}<span class="badge st-confirmed">Đã duyệt hết</span>{% endif %}
+      <a class="btn small" href="{{ url_for('recon_mapping', iid=i.id) if i.status == 'uploaded' else url_for('recon_detail', iid=i.id) }}">Mở</a></li>
+  {% endfor %}</ul>
+  {% else %}<p class="muted">Chưa có lần đối soát nào.</p>{% endif %}
+</section>
+{% endblock %}

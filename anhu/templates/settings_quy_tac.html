@@ -1,0 +1,77 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, help, settings_back with context %}
+{% block body %}
+{{ settings_back() }}
+<h1>{{ title }}</h1>
+{% call help() %}
+<ul>
+<li>Mỗi ca đã xác nhận được xếp vào <b>tối đa một cột</b>, theo thứ tự: 30 PHÚT (I) → DẠY THỬ (J) → 1–4 HV (E–H, tính theo số tên học viên). Không ca nào bị cộng hai lần.</li>
+<li>Mỗi lần lưu sẽ tạo <b>phiên bản mới</b> kèm ngày bắt đầu áp dụng. Các phiên bản cũ vẫn được giữ lại.</li>
+<li>Tháng đã chốt luôn hiển thị theo bản chốt, nên đổi quy tắc không làm thay đổi bảng công cũ.</li>
+<li>Khi chưa bấm <b>xác nhận</b>, bảng công sẽ hiện cảnh báo “quy tắc chưa xác nhận” và tổng tiền sẽ không hiển thị trên Tổng quan.</li>
+</ul>
+{% endcall %}
+{% set w = g.owner.can_write %}
+<section class="card" id="quy-tac">
+  <h2>Tạo phiên bản quy tắc xếp cột <span class="badge {{ 'st-confirmed' if rules.confirmed else 'st-pending' }}">đang dùng: phiên bản {{ rules.version }} · {{ 'đã xác nhận' if rules.confirmed else 'chưa xác nhận' }}</span></h2>
+  <p class="hint">Công thức trong file Excel gốc: E–H đếm mọi nhóm có tên, kể cả ca “Dạy thêm giờ”, trong khi ca đó cũng được liệt kê ở cột J, nên bị cộng hai lần. Cột I không có công thức nên luôn bằng 0.
+  Đề xuất mặc định bỏ phần cộng hai lần này. Bạn cần xác nhận lại với cách trung tâm thực tế tính công.</p>
+  <form method="post" action="{{ url_for('settings_action', action='quy-tac') }}">{{ csrf() }}
+    <label>Ca có thời lượng ≤ (phút) thì vào cột 30 PHÚT <input type="number" name="thirty_minute_max" min="0" max="120" value="{{ rules.thirty_minute_max }}" class="narrow"></label>
+    <label>…áp dụng cho loại ca</label>
+    <div class="checks">{% for k in all_kinds %}<label><input type="checkbox" name="thirty_kinds" value="{{ k.code }}" {{ 'checked' if k.code in rules.thirty_kinds }}> {{ k.label }}</label>{% endfor %}</div>
+    <label>Loại ca ghi vào cột J “DẠY THỬ” (không đếm vào E–H)</label>
+    <div class="checks">{% for k in all_kinds %}<label><input type="checkbox" name="j_kinds" value="{{ k.code }}" {{ 'checked' if k.code in rules.j_kinds }}> {{ k.label }}</label>{% endfor %}</div>
+    <label>Loại ca đếm vào E–H theo số học viên</label>
+    <div class="checks">{% for k in all_kinds %}<label><input type="checkbox" name="hv_kinds" value="{{ k.code }}" {{ 'checked' if k.code in rules.hv_kinds }}> {{ k.label }}</label>{% endfor %}</div>
+    <div class="row">
+      <label>Áp dụng từ ngày (để trống = mọi tháng chưa chốt) <input type="date" name="valid_from"></label>
+      <label class="grow">Ghi chú (VD: theo email trung tâm 05/11) <input name="note" maxlength="200"></label>
+    </div>
+    <label class="inline"><input type="checkbox" name="confirmed" value="1"> Tôi xác nhận quy tắc này đúng với cách trung tâm tính công</label>
+    {% if w %}<button class="btn primary">Lưu phiên bản mới</button>{% endif %}
+  </form>
+</section>
+
+<section class="card">
+  <h2>Các phiên bản quy tắc</h2>
+  <div class="tablewrap short"><table>
+    <thead><tr><th>Phiên bản</th><th>Áp dụng từ</th><th>30 phút</th><th>Cột J</th><th>E–H</th><th>Trạng thái</th><th>Ghi chú</th><th>Tạo lúc</th><th></th></tr></thead>
+    <tbody>{% for v in versions %}{% set r = v.rules %}
+      <tr><td>{{ v.version }}</td><td>{{ v.valid_from|dmy if v.valid_from.year > 2000 else 'mọi tháng' }}</td>
+        <td>≤ {{ r.thirty_minute_max }}′: {{ r.thirty_kinds|map('kind')|join(', ') }}</td><td>{{ r.j_kinds|map('kind')|join(', ') }}</td>
+        <td>{{ r.hv_kinds|map('kind')|join(', ') }}</td>
+        <td><span class="badge {{ 'st-confirmed' if v.confirmed else 'st-pending' }}">{{ 'đã xác nhận' if v.confirmed else 'chưa xác nhận' }}</span></td>
+        <td>{{ v.note or '' }}</td><td>{{ v.created_at.strftime('%d/%m/%Y %H:%M') }}{{ ' · ' ~ v.creator if v.creator }}</td>
+        <td>{% if w %}<form method="post" action="{{ url_for('settings_action', action='xac-nhan-quy-tac') }}" class="inline">{{ csrf() }}
+          <input type="hidden" name="version_id" value="{{ v.id }}"><input type="hidden" name="confirmed" value="{{ '0' if v.confirmed else '1' }}">
+          <button class="btn small">{{ 'Bỏ xác nhận' if v.confirmed else 'Xác nhận' }}</button></form>{% endif %}</td></tr>
+    {% endfor %}</tbody></table></div>
+</section>
+
+<div class="grid2">
+<section class="card" id="huy-ca">
+  <h2>Ca nghỉ / hủy có được tính công?</h2>
+  <p class="hint">Mặc định: <b>không tính</b>, cho tới khi có quy tắc được xác nhận. Ca hủy không bao giờ hiện là “đã dạy”, và không tạo chữ “Nghỉ” hay số 0 trong file Excel.
+  Hiện hệ thống chỉ ghi nhận lựa chọn “có tính công”, chưa tự cộng vào E–H.</p>
+  <form method="post" action="{{ url_for('settings_action', action='huy-ca') }}">{{ csrf() }}
+    {% for k, v in CANCEL_REASONS.items() %}{% set r = st.cancel_pay_rules.get(k, {}) %}
+    <div class="row"><label class="grow">{{ v }}</label>
+      <label><select name="pay_{{ k }}" aria-label="{{ v }}"><option value="0">Không tính công</option><option value="1" {{ 'selected' if r.get('pay') }}>Có tính công</option></select></label>
+      <label class="inline"><input type="checkbox" name="cf_{{ k }}" value="1" {{ 'checked' if r.get('confirmed') }}> đã xác nhận</label></div>
+    {% endfor %}
+    {% if w %}<button class="btn">Lưu</button>{% endif %}
+  </form>
+</section>
+
+<section class="card" id="con-khong">
+  <h2>Ý nghĩa cột “Còn không” (Google Form cũ) <span class="badge {{ 'st-confirmed' if st.flag_meaning_confirmed else 'st-pending' }}">{{ 'đã xác nhận' if st.flag_meaning_confirmed else 'chưa xác nhận' }}</span></h2>
+  <p class="hint">Theo dữ liệu, “Còn” luôn đứng trước một ca tiếp theo và “Không” luôn ở ca cuối (38/38 phản hồi). Vì vậy nhiều khả năng đây là câu hỏi điều hướng “còn ca nữa không?”, không phải điểm danh.
+  Hệ thống <b>không</b> dùng cột này để tính công; chỉ lưu lại nguyên văn.</p>
+  <form method="post" action="{{ url_for('settings_action', action='con-khong') }}">{{ csrf() }}
+    <label>Ý nghĩa theo bạn <textarea name="meaning" rows="3">{{ st.flag_meaning or 'Câu hỏi điều hướng của Google Form: Còn = còn ca tiếp theo, Không = hết ca trong ngày, Dạy thử + Thêm giờ = chuyển sang phần ca dạy thử/thêm giờ.' }}</textarea></label>
+    <label class="inline"><input type="checkbox" name="confirmed" value="1" {{ 'checked' if st.flag_meaning_confirmed }}> Xác nhận</label>
+    {% if w %}<button class="btn">Lưu</button>{% endif %}
+  </form>
+</section>
+</div>
+{% endblock %}

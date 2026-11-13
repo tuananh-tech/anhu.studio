@@ -1,0 +1,22 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, type_tag with context %}
+{% block body %}
+<h1>Xem trước: xác nhận {{ items|length }} ca theo kế hoạch</h1>
+<p class="note">Mỗi ca dưới đây sẽ được xác nhận <b>đúng giờ và đúng danh sách học viên dự kiến</b>. Bỏ chọn ca nào có thay đổi
+(vắng, thêm học viên, đổi giờ) rồi xác nhận riêng ca đó. Ca không có học viên sẽ chuyển sang <b>Cần kiểm tra</b>, không tính công.</p>
+<form method="post" action="{{ url_for('bulk_confirm') }}">{{ csrf() }}
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>Ngày</th><th>Giờ</th><th>Cơ sở</th><th>Học viên dự kiến</th><th class="num">Số HV (tự đếm)</th><th>Loại ca</th></tr></thead>
+    <tbody>{% for p in items %}
+      <tr><td><input type="checkbox" name="pid" value="{{ p.id }}" checked aria-label="Chọn"></td>
+        <td>{{ p.session_date|dmy }}</td><td>{{ p.start_time|hm }}–{{ p.end_time|hm }}</td>
+        <td>{{ type_tag(p.teaching_type) }} {{ p.location_name }}</td>
+        <td>{{ p.expected_students|map(attribute='name')|join(', ') or '— (sẽ thành Cần kiểm tra)' }}</td>
+        <td class="num">{{ p.expected_students|length or '' }}</td><td>{{ (p.session_kind)|kind }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <div class="row mt">
+    <button class="btn primary">Xác nhận các ca đã chọn</button>
+    <a class="btn" href="{{ url_for('sessions_page') }}">Quay lại</a>
+  </div>
+</form>
+{% endblock %}

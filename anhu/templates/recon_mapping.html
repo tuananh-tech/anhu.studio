@@ -1,0 +1,46 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf with context %}{% from '_m.html' import cong_nav, help with context %}
+{% set cols = mapping.get('columns', {}) %}
+{% block body %}
+{{ cong_nav() }}
+<div class="bar"><h1>Ghép cột — {{ imp.filename }}</h1><a class="btn small" href="{{ url_for('recon_page') }}">← Đối soát</a></div>
+<p class="hint">Kỳ {{ '%02d'|format(imp.month) }}/{{ imp.year }} · SHA-256 {{ imp.file_sha256[:16] }}… · file gốc được giữ nguyên
+  (<a href="{{ url_for('recon_original', iid=imp.id) }}">tải lại file gốc</a>).</p>
+
+<section class="card">
+  <form method="get" class="inline"><label>Sheet <select name="sheet" data-autosubmit>
+    {% for s in pv %}<option {{ 'selected' if s == sheet }}>{{ s }}</option>{% endfor %}</select></label></form>
+  <h2>Xem trước (14 hàng đầu)</h2>
+  <div class="tablewrap short"><table>
+    <thead><tr><th>#</th>{% for L in letters %}<th>{{ L }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for r in pv[sheet] %}<tr><td>{{ loop.index }}</td>{% for v in r %}<td class="pre">{{ v }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2>Cột tương ứng</h2>
+  <form method="post">{{ csrf() }}
+    <input type="hidden" name="sheet" value="{{ sheet }}">
+    <div class="row">
+      <label>Dữ liệu bắt đầu từ hàng <input type="number" name="start_row" min="1" value="{{ mapping.get('start_row', 3) }}"></label>
+    </div>
+    <div class="row">
+      {% for key, label in FIELDS.items() %}
+      <label>{{ label }}
+        <select name="col_{{ key }}" {{ 'required' if key == 'date' }}>
+          <option value="">— không có —</option>
+          {% for L in letters %}<option {{ 'selected' if cols.get(key) == L }}>{{ L }}</option>{% endfor %}
+        </select></label>
+      {% endfor %}
+    </div>
+    <p class="hint">Nếu file trung tâm dùng đúng mẫu Chấm công (A:L), các cột đã được gợi ý sẵn. Mapping được nhớ cho lần sau theo trung tâm.
+      Ô giờ / tên có nhiều dòng (xuống dòng) sẽ được tách thành từng ca.</p>
+    <div class="row">
+      <label class="inline"><input type="checkbox" name="save_profile" value="1"> Lưu làm hồ sơ ánh xạ mặc định cho trung tâm này</label>
+      <label class="grow">Tên hồ sơ <input name="profile_name" value="{{ 'Mẫu ' ~ imp.filename.rsplit('.', 1)[0] }}" maxlength="80"></label>
+    </div>
+    {% if profiles %}<p class="hint">Hồ sơ đã lưu: {% for p in profiles %}{{ p.name }}{{ ' (mặc định)' if p.is_default }}{{ ', ' if not loop.last }}{% endfor %} —
+      quản lý ở <a href="{{ url_for('settings_section', sec='excel') }}">Cài đặt → Mẫu Excel &amp; ánh xạ</a>.</p>{% endif %}
+    <button class="btn primary">Chạy đối chiếu</button>
+  </form>
+</section>
+{% endblock %}

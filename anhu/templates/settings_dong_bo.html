@@ -1,0 +1,20 @@
+{% extends 'base.html' %}{% from '_m.html' import settings_back with context %}
+{% block body %}
+{{ settings_back() }}
+<h1>{{ title }}</h1>
+<section class="card">
+  <p class="note">Phiên bản này <b>chưa triển khai</b> tính năng đồng bộ tự động. Lý do: phụ lục V1 để Google Forms, Sheets và Calendar sang V1.1, và tính năng này cần tài khoản Google Cloud cùng quyền truy cập do chủ dự án cấp.</p>
+  <h2>Hiện có thể dùng</h2>
+  <ul>
+    <li><b>Nhập dữ liệu cũ</b> từ file Google Form xuất ra Excel: <a href="{{ url_for('settings_section', sec='excel') }}#import">Cài đặt → Mẫu Excel → Import lịch sử</a>. Có xem trước, và import lại không bị nhân đôi.</li>
+    <li><b>Nhận file trung tâm</b> để đối soát: <a href="{{ url_for('recon_page') }}">Chấm công → Đối soát</a>.</li>
+    <li><b>Xuất file</b> bảng công đúng mẫu, báo cáo Excel và bản sao lưu.</li>
+  </ul>
+  <h2>Khi triển khai đồng bộ (dự kiến)</h2>
+  <ul>
+    <li>Cấu hình hoàn toàn trên trang này: chọn nguồn, tần suất, ánh xạ cột. Không cần sửa mã.</li>
+    <li>Dữ liệu đồng bộ về sẽ vào trạng thái <b>chờ duyệt</b>, không tự ghi đè dữ liệu cá nhân, không tự tính công.</li>
+    <li>Có nhật ký từng lần đồng bộ, kèm thông báo lỗi kết nối và nút chạy lại.</li>
+  </ul>
+</section>
+{% endblock %}

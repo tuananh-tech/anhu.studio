@@ -1,0 +1,68 @@
+{% macro csrf() %}<input type="hidden" name="_csrf" value="{{ session.csrf }}">{% endmacro %}
+
+{% macro status_badge(s) %}<span class="badge st-{{ s }}">{{ STATUS_LABEL.get(s, s) }}</span>{% endmacro %}
+
+{% macro type_tag(t) %}<span class="tag {{ 'tt-c' if t == 'center' else 'tt-p' }}">{{ 'Trung tâm' if t == 'center' else 'Dạy riêng' }}</span>{% endmacro %}
+
+{# Danh sách học viên THỰC TẾ: tick từng người (theo ID, giữ trùng tên) + nhập thêm tên. Số HV tự đếm, không có ô nhập số. #}
+{% macro attendee_picker(current, students, prefix='') %}
+<fieldset class="picker" data-picker>
+  <legend>Học viên hiện diện <span class="count" data-count>0</span></legend>
+  <div class="chips" data-chips>
+    {% for a in current %}
+    <label class="chip"><input type="checkbox" name="{{ prefix }}present" value="{{ a.student_id or '' }}|{{ a.name }}" checked> {{ a.name }}{% if not a.student_id %} <small class="muted">(chưa gắn hồ sơ)</small>{% endif %}</label>
+    {% endfor %}
+  </div>
+  {% if students %}
+  <div class="row">
+    <label class="grow">Thêm từ hồ sơ
+      <select data-add-student>
+        <option value="">— chọn học viên —</option>
+        {% for s in students %}<option value="{{ s.id }}|{{ s.display_name }}">{{ s.display_name }}{{ ' · ' ~ s.class_group if s.class_group }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+  {% endif %}
+  <label>Tên khác (phân cách bằng dấu phẩy hoặc xuống dòng)
+    <textarea name="{{ prefix }}extra_names" rows="2" data-extra placeholder="VD: Phúc, My, My, Quỳnh"></textarea>
+  </label>
+  <p class="hint">Số học viên được <b>tự đếm</b> từ danh sách tên của ca này. Tên trùng vẫn được tính riêng. Mục trống bị bỏ qua.</p>
+</fieldset>
+{% endmacro %}
+
+{% macro location_select(locs, selected=None, name='location_id', required=true) %}
+<select name="{{ name }}" {{ 'required' if required }}>
+  {% if not required %}<option value="">— giữ nguyên —</option>{% endif %}
+  {% for l in locs %}<option value="{{ l.id }}" {{ 'selected' if selected and l.id|string == selected|string }}>{{ l.name }}{{ ' — ' ~ l.center_name if l.center_name }}{{ ' (dạy riêng)' if l.kind == 'private_place' }}</option>{% endfor %}
+</select>
+{% endmacro %}
+
+{% macro kind_select(KINDS, selected='regular', name='kind', allow_empty=false) %}
+<select name="{{ name }}">
+  {% if allow_empty %}<option value="">— giữ nguyên —</option>{% endif %}
+  {% for k in KINDS %}<option value="{{ k }}" {{ 'selected' if k == selected }}>{{ (k)|kind }}</option>{% endfor %}
+  {% if selected and selected not in KINDS and not allow_empty %}<option value="{{ selected }}" selected>{{ selected|kind }} (đã ẩn)</option>{% endif %}
+</select>
+{% endmacro %}
+
+{% macro month_picker(y, m, endpoint, extra={}) %}
+<form method="get" action="{{ url_for(endpoint) }}" class="inline monthpick">
+  {% for k, v in extra.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <label class="sr" for="thang">Tháng</label>
+  <input type="month" id="thang" name="thang" value="{{ '%04d-%02d'|format(y, m) }}" data-autosubmit>
+</form>
+{% endmacro %}
+
+{# Điều hướng phụ trong một mục chính #}
+{% macro subnav(items) %}
+<nav class="tabs" aria-label="Mục con">{% for ep, label in items %}<a class="{{ 'on' if request.endpoint == ep }}" href="{{ url_for(ep) }}">{{ label }}</a>{% endfor %}</nav>
+{% endmacro %}
+{% macro lich_nav() %}{{ subnav([('calendar', 'Lịch'), ('sessions_page', 'Xác nhận & buổi dạy'), ('templates_page', 'Lịch cố định & ngoại lệ')]) }}{% endmacro %}
+{% macro cong_nav() %}{{ subnav([('timesheet_page', 'Bảng công'), ('recon_page', 'Đối soát trung tâm'), ('timesheet_periods', 'Kỳ chấm công')]) }}{% endmacro %}
+
+{# Hướng dẫn ngắn, mở/đóng được #}
+{% macro help(title='Hướng dẫn nhanh') %}
+<details class="help"><summary>? {{ title }}</summary><div>{{ caller() }}</div></details>
+{% endmacro %}
+
+{% macro settings_back() %}<p class="crumb"><a href="{{ url_for('settings_page') }}">← Cài đặt</a></p>{% endmacro %}

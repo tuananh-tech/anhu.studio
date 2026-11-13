@@ -1,0 +1,52 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, help, settings_back with context %}
+{% block body %}
+{{ settings_back() }}
+<h1>{{ title }}</h1>
+{% call help() %}
+<ul>
+<li><b>Tải bản sao lưu</b> mỗi tháng sau khi chốt kỳ, và lưu ở 2 nơi khác nhau, ví dụ máy tính và ổ đĩa đám mây cá nhân.
+  File chứa dữ liệu thật của học viên, nên <b>không gửi công khai</b>.</li>
+<li><b>Kiểm tra bản sao lưu</b> để chắc file không bị hỏng. Thao tác này chỉ đọc file, không ghi gì vào hệ thống.</li>
+<li><b>Khôi phục</b> chỉ chạy được trên tài khoản <b>chưa có dữ liệu</b>, ví dụ khi chuyển sang máy chủ mới. Mọi thứ được ghi trong một lần: nếu có lỗi thì không có gì bị thay đổi.</li>
+<li>Sao lưu toàn bộ máy chủ (cả hai tài khoản) do người quản trị làm theo <i>docs/QUAN_TRI_VAN_HANH.md</i>.</li>
+</ul>
+{% endcall %}
+{% if info.last_backup %}<p class="note">Bản sao lưu gần nhất: {{ info.last_backup.created_at.strftime('%d/%m/%Y %H:%M') }} ({{ info.last_backup.filename }}).</p>
+{% else %}<p class="note red">Chưa có bản sao lưu nào. Hãy tải một bản ngay bây giờ.</p>{% endif %}
+
+<div class="grid2">
+<section class="card">
+  <h2>1. Tải bản sao lưu</h2>
+  <p class="hint">Bao gồm: danh mục, học viên, liên hệ, lịch, buổi dạy, đơn giá, quy tắc, kỳ đã chốt (kèm file Excel đã chốt), file đối soát gốc, file import và nhật ký.</p>
+  {% if g.owner.self %}<form method="post" action="{{ url_for('backup_download') }}">{{ csrf() }}<button class="btn primary">Tải bản sao lưu (.zip)</button></form>
+  {% else %}<p class="muted">Chỉ chủ dữ liệu mới tải được bản sao lưu.</p>{% endif %}
+</section>
+<section class="card">
+  <h2>2. Kiểm tra bản sao lưu</h2>
+  <form method="post" action="{{ url_for('backup_verify') }}" enctype="multipart/form-data">{{ csrf() }}
+    <label>File sao lưu (.zip) <input type="file" name="file" accept=".zip" required></label>
+    <button class="btn">Kiểm tra (không ghi dữ liệu)</button></form>
+</section>
+</div>
+
+<section class="card">
+  <h2>3. Khôi phục vào tài khoản này</h2>
+  {% if empty and g.owner.self %}
+  <p class="hint">Tài khoản này đang trống, nên có thể khôi phục. Sau khi ghi xong, hệ thống sẽ đếm lại từng bảng và so với bản sao lưu.</p>
+  <form method="post" action="{{ url_for('backup_restore') }}" enctype="multipart/form-data" data-confirm="Khôi phục toàn bộ dữ liệu từ bản sao lưu vào tài khoản này?">{{ csrf() }}
+    <div class="row"><label class="grow">File sao lưu (.zip) <input type="file" name="file" accept=".zip" required></label>
+      <label>Gõ <b>KHOI PHUC</b> để xác nhận <input name="confirm_text" required autocomplete="off"></label></div>
+    <button class="btn champ">Khôi phục</button></form>
+  {% else %}
+  <p class="muted">Tài khoản đã có dữ liệu nên không khôi phục được (để tránh ghi đè hoặc trộn lẫn dữ liệu). Khi chuyển máy chủ, hãy khôi phục trên tài khoản mới tạo ở máy chủ mới.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Lịch sử sao lưu / kiểm tra / khôi phục</h2>
+  <ul class="list">{% for h in history %}<li><span class="t">{{ h.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+    <span class="badge {{ 'st-confirmed' if h.ok else 'st-needs_review' }}">{{ {'export':'Tải sao lưu','verify':'Kiểm tra','restore':'Khôi phục'}[h.kind] }}</span>
+    <span class="grow">{{ h.filename or '' }} <small class="muted">{{ h.actor or '' }} · SHA-256 {{ (h.sha256 or '')[:12] }}…</small></span></li>
+  {% else %}<li class="muted">Chưa có.</li>{% endfor %}</ul>
+</section>
+{% endblock %}

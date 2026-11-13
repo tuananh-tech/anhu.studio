@@ -1,0 +1,75 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, help, settings_back with context %}
+{% block body %}
+{{ settings_back() }}
+<h1>{{ title }}</h1>
+{% call help() %}
+<ul>
+<li><b>Lớp học</b>: lớp cố định ở trung tâm. <b>Nhóm học viên</b>: nhóm ghép tự do, ví dụ nhóm học riêng tại nhà.</li>
+<li>Khi một học viên rời lớp, bấm <b>Rời lớp</b>, đừng xóa. Lịch sử tham gia vẫn được giữ.</li>
+<li>Có thể lọc danh sách Học viên theo lớp/nhóm.</li>
+</ul>
+{% endcall %}
+{% set w = g.owner.can_write %}
+<div class="grid2">
+<section class="card">
+  <h2>Môn học</h2>
+  <ul class="list">{% for s in subjects %}<li class="{{ 'archived' if s.archived_at }}"><span class="grow">{{ s.name }}{% if s.archived_at %} <span class="badge st-void">đã lưu trữ</span>{% endif %}</span>
+    {% if w %}<details class="inline-edit"><summary>Sửa</summary>
+      <form method="post" action="{{ url_for('settings_action', action='mon-hoc') }}" class="row">{{ csrf() }}<input type="hidden" name="id" value="{{ s.id }}">
+        <label class="grow">Tên <input name="name" value="{{ s.name }}" required></label><button class="btn small">Lưu</button></form>
+      <form method="post" action="{{ url_for('settings_action', action='luu-tru-mon-hoc') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ s.id }}">
+        <input type="hidden" name="archived" value="{{ '0' if s.archived_at else '1' }}"><button class="btn small">{{ 'Khôi phục' if s.archived_at else 'Lưu trữ' }}</button></form>
+    </details>{% endif %}</li>
+  {% else %}<li class="muted">Chưa có môn học.</li>{% endfor %}</ul>
+  {% if w %}<form method="post" action="{{ url_for('settings_action', action='mon-hoc') }}" class="row mt">{{ csrf() }}
+    <label class="grow">Môn mới <input name="name" required placeholder="VD: Tiếng Anh thiếu nhi"></label><button class="btn small">Thêm</button></form>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Lớp học &amp; nhóm học viên</h2>
+  <ul class="list">{% for gr in groups %}<li class="{{ 'archived' if gr.archived_at }}">
+    <a class="grow" href="{{ url_for('settings_section', sec='lop-hoc', nhom=gr.id) }}"><b>{{ gr.name }}</b></a>
+    <span class="tag {{ 'tt-c' if gr.kind == 'class' else 'tt-p' }}">{{ 'Lớp' if gr.kind == 'class' else 'Nhóm' }}</span>
+    <small class="muted">{{ gr.subject_name or '' }}{{ ' · ' ~ gr.location_name if gr.location_name }} · {{ gr.members }} HV</small>
+    {% if gr.archived_at %}<span class="badge st-void">đã lưu trữ</span>{% endif %}</li>
+  {% else %}<li class="muted">Chưa có lớp/nhóm.</li>{% endfor %}</ul>
+  {% if w %}<details class="mt"><summary>+ Thêm lớp / nhóm</summary>
+  <form method="post" action="{{ url_for('settings_action', action='lop') }}">{{ csrf() }}
+    <div class="row"><label class="grow">Tên <input name="name" required></label>
+      <label>Loại <select name="kind"><option value="class">Lớp học</option><option value="group">Nhóm học viên</option></select></label></div>
+    <div class="row"><label>Môn <select name="subject_id"><option value="">—</option>{% for s in subjects if not s.archived_at %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></label>
+      <label>Cơ sở <select name="location_id"><option value="">—</option>{% for l in locs %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select></label></div>
+    <button class="btn small primary">Thêm</button></form></details>{% endif %}
+</section>
+</div>
+
+{% if group %}
+<section class="card" id="nhom">
+  <h2>{{ 'Lớp' if group.kind == 'class' else 'Nhóm' }}: {{ group.name }}</h2>
+  {% if w %}<details><summary>Sửa thông tin</summary>
+    <form method="post" action="{{ url_for('settings_action', action='lop') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ group.id }}">
+      <div class="row"><label class="grow">Tên <input name="name" value="{{ group.name }}" required></label>
+        <label>Loại <select name="kind"><option value="class" {{ 'selected' if group.kind == 'class' }}>Lớp học</option><option value="group" {{ 'selected' if group.kind == 'group' }}>Nhóm</option></select></label>
+        <label>Môn <select name="subject_id"><option value="">—</option>{% for s in subjects %}<option value="{{ s.id }}" {{ 'selected' if s.id == group.subject_id }}>{{ s.name }}</option>{% endfor %}</select></label>
+        <label>Cơ sở <select name="location_id"><option value="">—</option>{% for l in locs %}<option value="{{ l.id }}" {{ 'selected' if l.id == group.location_id }}>{{ l.name }}</option>{% endfor %}</select></label></div>
+      <label>Ghi chú <textarea name="notes" rows="2">{{ group.notes or '' }}</textarea></label>
+      <button class="btn small primary">Lưu</button></form>
+    <form method="post" action="{{ url_for('settings_action', action='luu-tru-lop') }}" class="mt">{{ csrf() }}<input type="hidden" name="id" value="{{ group.id }}">
+      <input type="hidden" name="archived" value="{{ '0' if group.archived_at else '1' }}"><button class="btn small danger">{{ 'Khôi phục' if group.archived_at else 'Lưu trữ lớp/nhóm' }}</button></form>
+  </details>{% endif %}
+  <h3>Thành viên</h3>
+  <div class="tablewrap short"><table><thead><tr><th>Học viên</th><th>Từ ngày</th><th>Đến ngày</th><th></th></tr></thead><tbody>
+  {% for m in group.member_list %}<tr class="{{ 'empty' if m.left_on }}"><td><a href="{{ url_for('student_detail', sid=m.student_id) }}">{{ m.display_name }}</a></td>
+    <td>{{ m.joined_on|dmy }}</td><td>{{ m.left_on|dmy if m.left_on else 'đang học' }}</td>
+    <td>{% if w and not m.left_on %}<form method="post" action="{{ url_for('settings_action', action='roi-lop') }}" class="inline">{{ csrf() }}
+      <input type="hidden" name="member_id" value="{{ m.id }}"><input type="hidden" name="group_id" value="{{ group.id }}">
+      <input type="date" name="left_on" value="{{ today.isoformat() }}" aria-label="Ngày rời"><button class="btn small">Rời lớp</button></form>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="4" class="muted">Chưa có thành viên.</td></tr>{% endfor %}</tbody></table></div>
+  {% if w %}<form method="post" action="{{ url_for('settings_action', action='thanh-vien') }}" class="mt">{{ csrf() }}<input type="hidden" name="group_id" value="{{ group.id }}">
+    <div class="row"><label class="grow">Thêm học viên (giữ Ctrl để chọn nhiều)
+      <select name="student_id" multiple size="5" required>{% for s in students %}<option value="{{ s.id }}">{{ s.display_name }}</option>{% endfor %}</select></label>
+      <label>Từ ngày <input type="date" name="joined_on" value="{{ today.isoformat() }}"></label></div>
+    <button class="btn small primary">Thêm vào {{ group.name }}</button></form>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

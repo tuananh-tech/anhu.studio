@@ -1,0 +1,77 @@
+{% extends 'base.html' %}{% from '_m.html' import month_picker, status_badge, type_tag with context %}
+{% block body %}
+<div class="bar">
+  <div class="left"><h1>Tổng quan</h1></div>
+  <div class="right">{{ month_picker(y, m, 'dashboard') }}</div>
+</div>
+<section class="kpis" aria-label="Số liệu tháng {{ m }}/{{ y }}">
+  <div class="kpi"><b>{{ k.planned_total }}</b><span>Ca dự kiến (theo lịch)</span></div>
+  <div class="kpi"><b>{{ k.confirmed }}</b><span>Ca đã xác nhận (thực tế)</span></div>
+  <div class="kpi {{ 'alert' if k.unconfirmed }}"><b>{{ k.unconfirmed }}</b><span>Ca chưa xác nhận (đã tới ngày)</span></div>
+  <div class="kpi"><b>{{ k.cancelled }}</b><span>Ca nghỉ / hủy</span></div>
+  <div class="kpi"><b>{{ '%.1f'|format(k.minutes / 60) }}</b><span>Giờ đã dạy (đã xác nhận)</span></div>
+  <div class="kpi {{ 'alert' if k.recon_pending }}"><b>{{ k.recon_pending }}</b><span>Chênh lệch đối soát chờ xử lý</span></div>
+</section>
+<div class="sub">
+  <span>Ca bổ sung/ngoài lịch: <b>{{ k.extra }}</b></span>
+  <span>Cần kiểm tra: <b>{{ k.review }}</b></span>
+  <span>Trung tâm / Dạy riêng: <b>{{ k.center_n }}</b> / <b>{{ k.private_n }}</b></span>
+  <span>Tiền công trung tâm:
+    {% if pay and pay.complete and rules.confirmed %}<b>{{ pay.total|money }}</b> (ước tính, chưa chốt)
+    {% else %}<span title="Chỉ hiện khi quy tắc và đơn giá đã được xác nhận">chưa hiển thị — {{ 'thiếu đơn giá đã xác nhận' if not (pay and pay.complete) else 'quy tắc xếp cột chưa xác nhận' }}</span>{% endif %}
+  </span>
+  <span>Dạy riêng đã thu / còn phải thu: <b>{{ k.private_paid|money }}</b> / <b>{{ k.private_due|money }}</b>{% if k.private_unpriced %} ({{ k.private_unpriced }} ca chưa có giá){% endif %}</span>
+</div>
+
+<div class="grid2">
+  <section class="card">
+    <div class="bar"><h2>Hôm nay {{ today|dmy }}</h2><a class="btn small" href="{{ url_for('calendar') }}">Mở lịch tuần</a></div>
+    {% if todays %}
+    <ul class="list">
+      {% for p in todays %}
+      <li><span class="t">{{ p.start_time|hm }}–{{ p.end_time|hm }}</span>{{ type_tag(p.teaching_type) }}
+        <span class="grow">{{ p.location_name }} · {{ p.expected_students|map(attribute='name')|join(', ') or 'chưa có danh sách' }}</span>
+        {{ status_badge('pending' if p.status == 'planned' else p.status) }}
+        <a class="btn small {{ 'primary' if p.status == 'planned' }}" href="{{ url_for('planned_detail', pid=p.id) }}">{{ 'Xác nhận' if p.status == 'planned' else 'Mở' }}</a></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">Không có ca dự kiến hôm nay.</p>{% endif %}
+  </section>
+
+  <section class="card">
+    <div class="bar"><h2>Ca cần xác nhận ({{ pending_n }})</h2>
+      <a class="btn small" href="{{ url_for('sessions_page') }}">Xác nhận nhiều ca</a></div>
+    {% if pending %}
+    <ul class="list">
+      {% for p in pending %}
+      <li><span class="t">{{ p.session_date|dm }} {{ p.start_time|hm }}</span>{{ type_tag(p.teaching_type) }}
+        <span class="grow">{{ p.location_name }}</span>
+        <a class="btn small primary" href="{{ url_for('planned_detail', pid=p.id) }}">Xác nhận</a></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">Không còn ca nào chờ xác nhận trong tháng.</p>{% endif %}
+  </section>
+
+  <section class="card">
+    <div class="bar"><h2>Chênh lệch đối soát chờ xử lý</h2><a class="btn small" href="{{ url_for('recon_page') }}">Đối soát</a></div>
+    {% if recon %}
+    <ul class="list">{% for i in recon %}
+      <li><span class="t">{{ i.day|dm }}</span><span class="badge st-needs_review">{{ RECON_LABEL.get(i.category, i.category) }}</span>
+        <span class="grow">{{ i.detail }}</span>
+        <a class="btn small" href="{{ url_for('recon_detail', iid=i.import_id) }}">Mở</a></li>{% endfor %}
+    </ul>
+    {% else %}<p class="muted">Không có chênh lệch đang chờ.</p>{% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Thao tác nhanh</h2>
+    <div class="row">
+      <a class="btn primary" href="{{ url_for('sessions_page') }}#them">+ Ca phát sinh</a>
+      <a class="btn" href="{{ url_for('templates_page') }}">Lịch lặp</a>
+      <a class="btn" href="{{ url_for('timesheet_page', thang='%04d-%02d'|format(y, m)) }}">Bảng công tháng</a>
+      <a class="btn" href="{{ url_for('timesheet_export', thang='%04d-%02d'|format(y, m)) }}">Xuất Excel mẫu</a>
+    </div>
+    {% if not rules.confirmed %}<p class="note">Quy tắc xếp cột 30 PHÚT / DẠY THỬ đang là <b>đề xuất, chưa xác nhận</b>. <a href="{{ url_for('settings_section', sec='quy-tac') }}">Xem và xác nhận</a>.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, location_select, kind_select with context %}{% from '_m.html' import lich_nav, help with context %}
+{% block body %}
+{{ lich_nav() }}
+<div class="bar"><h1>Thời khóa biểu cố định &amp; ngoại lệ</h1></div>
+{% call help() %}
+<ul>
+<li>Lịch cố định tự sinh ra <b>ca dự kiến</b> trên trang Lịch, theo giờ Việt Nam. Ca dự kiến chưa phải là công; chỉ khi bạn xác nhận đã dạy thì mới được tính.</li>
+<li><b>Đổi cả chuỗi</b> chỉ áp dụng từ ngày bạn chọn. Các ca trước ngày đó, các ca đã sửa riêng và các ca đã xác nhận đều giữ nguyên.</li>
+<li><b>Ngoại lệ</b> (nghỉ, dời, dạy bù, sửa riêng một buổi): mở ca đó trên trang Lịch. Danh sách ngoại lệ trong khoảng ±60 ngày nằm ở cuối trang này.</li>
+</ul>
+{% endcall %}
+
+{% if g.owner.can_write %}
+<section class="card"><details {{ 'open' if not tpls }}><summary>+ Tạo lịch lặp</summary>
+<form method="post">{{ csrf() }}
+  <label>Thứ trong tuần</label>
+  <div class="checks">{% for i in range(7) %}<label><input type="checkbox" name="weekday" value="{{ i }}"> {{ WEEKDAY_LABEL[i] }}</label>{% endfor %}</div>
+  <div class="row">
+    <label>Bắt đầu <input type="time" name="start" required></label>
+    <label>Kết thúc <input type="time" name="end" required></label>
+    <label>Ngày hiệu lực <input type="date" name="valid_from" value="{{ today.isoformat() }}" required></label>
+    <label>Ngày kết thúc (nếu có) <input type="date" name="valid_to"></label>
+  </div>
+  <div class="row">
+    <label class="grow">Cơ sở / địa điểm (quyết định Trung tâm hay Dạy riêng) {{ location_select(locs) }}</label>
+    <label>Lớp / nhóm <input name="class_group" list="dl-groups"></label>
+    <label>Loại ca {{ kind_select(KINDS) }}</label>
+    <datalist id="dl-groups">{% for gr in groups %}<option value="{{ gr.name }}">{% endfor %}</datalist>
+  </div>
+  <label>Học viên dự kiến</label>
+  <div class="checks">{% for s in students %}<label><input type="checkbox" name="student_ids" value="{{ s.id }}"> {{ s.display_name }}</label>{% endfor %}</div>
+  <label>Tên khác (dấu phẩy) <input name="extra_names"></label>
+  <label>Ghi chú <input name="notes"></label>
+  <label>Lý do ngoại lệ nếu trùng giờ với lịch khác <input name="override_reason"></label>
+  {% if not locs %}<p class="note">Chưa có cơ sở/địa điểm — thêm ở <a href="{{ url_for('settings_section', sec='danh-muc') }}">Cài đặt</a>.</p>{% endif %}
+  <button class="btn primary">Tạo lịch lặp</button>
+</form></details></section>
+{% endif %}
+
+<section class="card">
+  <h2>Các phiên bản lịch</h2>
+  {% if tpls %}
+  <div class="tablewrap"><table>
+    <thead><tr><th>Thứ</th><th>Giờ</th><th>Cơ sở</th><th>Loại hình</th><th>Hiệu lực</th><th>Học viên dự kiến</th><th class="no-print">Thao tác</th></tr></thead>
+    <tbody>{% for t in tpls %}
+    <tr class="{{ 'empty' if t.valid_to and t.valid_to < today }}">
+      <td>{{ WEEKDAY_LABEL[t.weekday] }}</td><td>{{ t.start_time|hm }}–{{ t.end_time|hm }}</td><td>{{ t.location_name }}</td>
+      <td>{{ 'Trung tâm' if t.teaching_type == 'center' else 'Dạy riêng' }} · {{ (t.session_kind)|kind }}</td>
+      <td>{{ t.valid_from|dmy }} → {{ t.valid_to|dmy if t.valid_to else 'không thời hạn' }}</td>
+      <td>{{ t.expected_students|map(attribute='name')|join(', ') }}</td>
+      <td class="no-print">{% if g.owner.can_write and (not t.valid_to or t.valid_to >= today) %}
+        <details><summary>Đổi cả chuỗi</summary>
+          <form method="post" action="{{ url_for('template_action', tid=t.id, action='doi') }}">{{ csrf() }}
+            <label>Từ ngày <input type="date" name="effective_from" value="{{ today.isoformat() }}" required></label>
+            <label>Thứ <select name="weekday">{% for i in range(7) %}<option value="{{ i }}" {{ 'selected' if i == t.weekday }}>{{ WEEKDAY_LABEL[i] }}</option>{% endfor %}</select></label>
+            <div class="row"><label>Bắt đầu <input type="time" name="start" value="{{ t.start_time|hm }}"></label>
+              <label>Kết thúc <input type="time" name="end" value="{{ t.end_time|hm }}"></label></div>
+            <label>Cơ sở {{ location_select(locs, t.location_id) }}</label>
+            <label>Lý do <input name="reason"></label>
+            <button class="btn small">Áp dụng từ ngày này</button>
+          </form></details>
+        <details><summary>Kết thúc chuỗi</summary>
+          <form method="post" action="{{ url_for('template_action', tid=t.id, action='ket-thuc') }}">{{ csrf() }}
+            <label>Ngày cuối <input type="date" name="last_day" required></label>
+            <button class="btn small danger">Kết thúc</button></form></details>
+      {% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">Chưa có lịch lặp.</p>{% endif %}
+</section>
+
+<section class="card" id="ngoai-le">
+  <h2>Ngoại lệ gần đây (±60 ngày)</h2>
+  <div class="tablewrap short"><table>
+    <thead><tr><th>Ngày</th><th>Giờ</th><th>Cơ sở</th><th>Loại ngoại lệ</th><th>Ghi chú</th><th></th></tr></thead>
+    <tbody>{% for p in exceptions %}<tr><td>{{ p.session_date|dmy }}</td><td>{{ p.start_time|hm }}–{{ p.end_time|hm }}</td><td>{{ p.location_name or '' }}</td>
+      <td>{% if p.status == 'cancelled' %}Nghỉ/hủy: {{ CANCEL_REASONS.get(p.cancel_reason, '') }}{% elif p.status == 'rescheduled' %}Đã dời sang ngày khác
+        {% elif p.makeup_for_id %}Dạy bù{% elif p.rescheduled_from_id %}Ca dời tới{% elif not p.template_id %}Ca ngoài lịch{% else %}Sửa riêng ca{% endif %}</td>
+      <td>{{ p.cancel_note or '' }}</td><td><a class="btn small" href="{{ url_for('planned_detail', pid=p.id) }}">Mở</a></td></tr>
+    {% else %}<tr><td colspan="6" class="muted">Không có ngoại lệ.</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endblock %}

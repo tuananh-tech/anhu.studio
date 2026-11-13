@@ -1,0 +1,63 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, location_select, help with context %}
+{% block body %}
+<div class="bar"><h1>Học viên</h1></div>
+{% call help() %}
+<ul>
+<li>Mỗi học viên có một <b>hồ sơ riêng (ID)</b>. Hai bé trùng tên vẫn là hai hồ sơ khác nhau. Có thể đặt thêm <b>mã học viên</b> để phân biệt.</li>
+<li>Học viên đã nghỉ hẳn: mở hồ sơ → <b>Lưu trữ</b>. Hồ sơ sẽ ẩn khỏi danh sách chọn, còn lịch sử học vẫn được giữ.</li>
+<li>Người liên hệ (phụ huynh), lớp và nhóm được quản lý trong từng hồ sơ học viên.</li>
+</ul>
+{% endcall %}
+<section class="card">
+  <form method="get">
+    <div class="row">
+      <label class="grow">Tìm tên (không dấu) <input name="q" value="{{ args.get('q', '') }}"></label>
+      <label>Trạng thái <select name="trang_thai"><option value="">Tất cả</option>
+        {% for k, v in [('active','Đang học'),('paused','Tạm nghỉ'),('stopped','Ngừng học'),('archived','Đã lưu trữ'),('all','Tất cả (kể cả lưu trữ)')] %}<option value="{{ k }}" {{ 'selected' if args.get('trang_thai') == k }}>{{ v }}</option>{% endfor %}</select></label>
+      <label>Cơ sở <select name="co_so"><option value="">Tất cả</option>
+        {% for l in locs %}<option value="{{ l.id }}" {{ 'selected' if args.get('co_so') == l.id|string }}>{{ l.name }}</option>{% endfor %}</select></label>
+      <label>Loại hình <select name="loai"><option value="">Tất cả</option>
+        <option value="center" {{ 'selected' if args.get('loai') == 'center' }}>Trung tâm</option>
+        <option value="private" {{ 'selected' if args.get('loai') == 'private' }}>Dạy riêng</option></select></label>
+      <label>Lớp (chữ) <input name="lop" value="{{ args.get('lop', '') }}"></label>
+      <label>Lớp / nhóm <select name="nhom"><option value="">Tất cả</option>{% for gr in groups %}<option value="{{ gr.id }}" {{ 'selected' if args.get('nhom') == gr.id|string }}>{{ gr.name }}</option>{% endfor %}</select></label>
+    </div>
+    <div class="row"><button class="btn primary">Lọc</button><a class="btn" href="{{ url_for('students_page') }}">Xóa bộ lọc</a>
+      <button class="btn" name="xuat" value="csv">Xuất danh sách đã lọc (CSV)</button></div>
+  </form>
+</section>
+<section class="card">
+  {% if lst %}
+  <div class="tablewrap"><table>
+    <thead><tr><th class="sticky-col">Tên</th><th>Mã</th><th>Lớp/nhóm</th><th>Môn</th><th>Cơ sở</th><th>Loại hình</th><th>Trạng thái</th></tr></thead>
+    <tbody>{% for s in lst %}
+      <tr class="{{ 'empty' if s.archived_at }}"><td class="sticky-col"><a href="{{ url_for('student_detail', sid=s.id) }}">{{ s.display_name }}</a></td><td>{{ s.code or '' }}</td><td>{{ s.class_group or '' }}</td>
+        <td>{{ s.subject or '' }}</td><td>{{ s.places or '' }}</td>
+        <td>{{ (s.types or '').replace('center', 'Trung tâm').replace('private', 'Dạy riêng') }}</td>
+        <td>{{ {'active':'Đang học','paused':'Tạm nghỉ','stopped':'Ngừng học'}[s.status] }}{% if s.archived_at %} <span class="badge st-void">lưu trữ</span>{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">Chưa có học viên phù hợp.</p>{% endif %}
+</section>
+{% if g.owner.can_write %}
+<section class="card"><details><summary>+ Thêm học viên</summary>
+  <form method="post">{{ csrf() }}
+    <div class="row">
+      <label class="grow">Tên hiển thị <input name="display_name" required></label>
+      <label>Mã học viên (tùy chọn) <input name="code" maxlength="30"></label>
+      <label>Môn <input name="subject" list="dl-subjects"></label>
+      <label>Ngày bắt đầu <input type="date" name="start_date"></label>
+    </div>
+    <div class="row">
+      <label>Lớp / nhóm (chữ tự do) <input name="class_group"></label>
+      <label>Thêm vào lớp/nhóm <select name="group_id"><option value="">—</option>{% for gr in groups %}<option value="{{ gr.id }}">{{ gr.name }}</option>{% endfor %}</select></label>
+    </div>
+    <datalist id="dl-subjects">{% for s in subjects %}<option value="{{ s.name }}">{% endfor %}</datalist>
+    <label>Học tại (có thể thêm nhiều nơi sau) <select name="location_id"><option value="">— chưa chọn —</option>
+      {% for l in locs %}<option value="{{ l.id }}">{{ l.name }}{{ ' (dạy riêng)' if l.kind == 'private_place' }}</option>{% endfor %}</select></label>
+    <label>Ghi chú <input name="notes"></label>
+    <p class="hint">Không cần nhập liên hệ phụ huynh nếu không thực sự cần. Hai học viên trùng tên là hai hồ sơ (ID) khác nhau.</p>
+    <button class="btn primary">Thêm</button>
+  </form></details></section>
+{% endif %}
+{% endblock %}

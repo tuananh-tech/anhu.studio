@@ -1,0 +1,60 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf with context %}{% from '_m.html' import cong_nav, help with context %}
+{% block body %}
+{{ cong_nav() }}
+<div class="bar">
+  <div class="left"><h1>Kết quả đối soát {{ '%02d'|format(imp.month) }}/{{ imp.year }}</h1></div>
+  <div class="right">
+    <a class="btn small" href="{{ url_for('recon_mapping', iid=imp.id) }}">Sửa ghép cột / chạy lại</a>
+    <a class="btn small" href="{{ url_for('recon_original', iid=imp.id) }}">File gốc trung tâm</a>
+    <a class="btn primary small" href="{{ url_for('recon_report', iid=imp.id) }}">Xuất biên bản chênh lệch</a>
+  </div>
+</div>
+<p class="hint">{{ imp.filename }} · SHA-256 {{ imp.file_sha256[:16] }}… · Chấp nhận phía trung tâm chỉ ghi nhận quyết định;
+muốn sửa dữ liệu của bạn, mở buổi dạy và sửa có lý do (nhật ký).</p>
+
+<section class="card">
+  <form method="get" class="row">
+    <label>Loại <select name="loai"><option value="">Tất cả</option>
+      {% for k, v in RECON_LABEL.items() %}<option value="{{ k }}" {{ 'selected' if args.get('loai') == k }}>{{ v }}</option>{% endfor %}</select></label>
+    <label>Duyệt <select name="duyet"><option value="">Tất cả</option>
+      {% for k, v in RES_LABEL.items() %}<option value="{{ k }}" {{ 'selected' if args.get('duyet') == k }}>{{ v }}</option>{% endfor %}</select></label>
+    <button class="btn">Lọc</button><a class="btn" href="{{ url_for('recon_detail', iid=imp.id, duyet='pending') }}">Chỉ chờ duyệt</a>
+    <a class="btn" href="{{ url_for('recon_detail', iid=imp.id) }}">Xóa lọc</a>
+  </form>
+  <div class="sub mt">{% for c in counts %}<span>{{ RECON_LABEL.get(c.category, c.category) }} · {{ RES_LABEL[c.resolution] }}: <b>{{ c.n }}</b></span>{% endfor %}</div>
+</section>
+
+{% for it in items %}
+<section class="card">
+  <div class="bar">
+    <div class="left"><b>{{ it.day|dmy }}</b>
+      <span class="badge {{ 'st-confirmed' if it.category == 'match' else 'st-needs_review' }}">{{ RECON_LABEL.get(it.category, it.category) }}</span>
+      <span>{{ it.detail }}</span></div>
+    <span class="badge {{ 'st-pending' if it.resolution == 'pending' else 'st-confirmed' }}">{{ RES_LABEL[it.resolution] }}</span>
+  </div>
+  {% if it.category != 'match' %}
+  <details><summary>Chứng cứ</summary>
+    <div class="grid2">
+      <div><h3>Phía cá nhân</h3>
+        {% if it.our.id %}<p>{{ it.our.time }} · {{ it.our.n }} HV · {{ it.our.kind }} · {{ it.our.location }}<br>{{ (it.our.attendees or [])|join(', ') }}</p>
+          <a class="btn small" href="{{ url_for('actual_detail', aid=it.our.id) }}">Mở buổi dạy</a>
+        {% elif it.our.counts %}<pre class="ev-json">{{ it.our.counts }}</pre>{% else %}<p class="muted">Không có</p>{% endif %}</div>
+      <div><h3>Phía trung tâm</h3>
+        {% if it.their.row %}<p>Hàng {{ it.their.row }}{{ ', dòng ' ~ it.their.line if it.their.line }} · {{ it.their.time }}{% if it.their.attendees %} · {{ it.their.attendees|join(', ') }}{% endif %}</p>
+          <pre class="ev-json">{% for k, v in (it.their.raw or {}).items() %}{{ k }}: {{ v }}
+{% endfor %}</pre>
+        {% elif it.their.counts %}<pre class="ev-json">{{ it.their.counts }} (hàng {{ it.their.rows }})</pre>{% else %}<p class="muted">Không có</p>{% endif %}</div>
+    </div>
+  </details>
+  {% if g.owner.can_write %}
+  <form method="post" action="{{ url_for('recon_resolve', item_id=it.id) }}" class="row">{{ csrf() }}
+    <label>Quyết định <select name="resolution">
+      {% for k in ['pending', 'accept_ours', 'accept_theirs', 'ignored'] %}<option value="{{ k }}" {{ 'selected' if it.resolution == k }}>{{ RES_LABEL[k] }}</option>{% endfor %}</select></label>
+    <label class="grow">Ghi chú (bắt buộc khi chấp nhận phía trung tâm / bỏ qua) <input name="note" value="{{ it.resolution_note or '' }}"></label>
+    <button class="btn small">Lưu</button>
+  </form>
+  {% endif %}
+  {% endif %}
+</section>
+{% else %}<p class="muted">Không có mục nào.</p>{% endfor %}
+{% endblock %}

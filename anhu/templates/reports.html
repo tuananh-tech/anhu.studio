@@ -1,0 +1,70 @@
+{% extends 'base.html' %}{% from '_m.html' import help with context %}
+{% block body %}
+<div class="bar"><div class="left"><h1>Báo cáo</h1></div>
+  <div class="right"><a class="btn primary" href="{{ request.full_path }}{{ '&' if '?' in request.full_path else '?' }}xuat=xlsx">Xuất Excel</a>
+    <button type="button" class="btn" data-print>In</button></div></div>
+<nav class="tabs">{% for k, v in TABS %}<a class="{{ 'on' if tab == k }}" href="{{ url_for('reports_page', tab=k, nam=year, tu=d1.isoformat(), den=d2.isoformat()) }}">{{ v }}</a>{% endfor %}</nav>
+{% call help() %}
+<ul>
+<li>Báo cáo chỉ tính các <b>buổi dạy đã xác nhận</b>. Số liệu của tháng đã chốt được lấy từ bản chốt.</li>
+<li>Tiền công trung tâm chỉ hiển thị khi mọi ca trong tháng đều có đơn giá đã xác nhận.</li>
+<li>Bấm <b>Xuất Excel</b> để tải đúng bảng đang xem.</li>
+</ul>
+{% endcall %}
+
+<form method="get" class="card filters no-print"><input type="hidden" name="tab" value="{{ tab }}">
+  <div class="row">
+  {% if tab == 'nam' %}<label>Năm <input type="number" name="nam" value="{{ year }}" min="2000" max="2100"></label>
+  {% else %}<label>Từ ngày <input type="date" name="tu" value="{{ d1.isoformat() }}"></label><label>Đến ngày <input type="date" name="den" value="{{ d2.isoformat() }}"></label>
+    {% if tab == 'hoc-vien' %}<label>Loại hình <select name="loai"><option value="">Tất cả</option><option value="center" {{ 'selected' if tt == 'center' }}>Trung tâm</option><option value="private" {{ 'selected' if tt == 'private' }}>Dạy riêng</option></select></label>{% endif %}
+  {% endif %}
+  <button class="btn">Xem</button></div>
+</form>
+
+{% if tab == 'nam' %}
+<div class="tablewrap"><table>
+  <thead><tr><th class="sticky-col">Tháng</th><th>Kỳ</th><th class="num">Ca TT</th><th class="num">Ca riêng</th><th class="num">Giờ</th>
+    <th class="num">1 HV</th><th class="num">2 HV</th><th class="num">3HV</th><th class="num">4HV</th><th class="num">30′</th><th class="num">Thử (J)</th>
+    <th class="num">Cần KT</th><th>Tiền công TT</th><th>Riêng đã thu</th><th>Riêng còn thu</th><th class="num">Đối soát chờ</th></tr></thead>
+  <tbody>{% set tot = namespace(c=0, p=0, mi=0) %}
+  {% for r in data %}{% set tot.c = tot.c + r.center_n %}{% set tot.p = tot.p + r.private_n %}{% set tot.mi = tot.mi + r.minutes %}
+    <tr class="{{ 'empty' if not (r.center_n or r.private_n) }}"><td class="sticky-col"><a href="{{ url_for('timesheet_page', thang='%04d-%02d'|format(year, r.month)) }}">{{ '%02d'|format(r.month) }}/{{ year }}</a></td>
+      <td>{% if r.locked %}<span class="badge st-confirmed">Đã chốt</span>{% endif %}</td>
+      <td class="num">{{ r.center_n or '' }}</td><td class="num">{{ r.private_n or '' }}</td><td class="num">{{ '%.1f'|format(r.minutes / 60) if r.minutes else '' }}</td>
+      {% for k in 'EFGHI' %}<td class="num">{{ r.totals.get(k) or '' }}</td>{% endfor %}<td class="num">{{ r.j or '' }}</td>
+      <td class="num">{{ r.review or '' }}</td><td>{{ r.pay_total|money if r.pay_total else ('—' if r.center_n else '') }}</td>
+      <td>{{ r.paid|money if r.paid else '' }}</td><td>{{ r.due|money if r.due else '' }}</td><td class="num">{{ r.recon_pending or '' }}</td></tr>
+  {% endfor %}
+    <tr class="total"><td class="sticky-col">Cả năm</td><td></td><td class="num">{{ tot.c }}</td><td class="num">{{ tot.p }}</td><td class="num">{{ '%.1f'|format(tot.mi / 60) }}</td>
+      {% for k in 'EFGHI' %}<td class="num">{{ data|sum(attribute='totals.' ~ k) }}</td>{% endfor %}<td class="num">{{ data|sum(attribute='j') }}</td><td colspan="5"></td></tr>
+  </tbody></table></div>
+
+{% elif tab == 'hoc-vien' %}
+<div class="tablewrap"><table>
+  <thead><tr><th class="sticky-col">Học viên</th><th>Mã</th><th class="num">Số buổi</th><th class="num">Giờ</th><th class="num">Trung tâm</th><th class="num">Dạy riêng</th><th class="num">Dạy bù</th><th>Buổi đầu</th><th>Buổi cuối</th></tr></thead>
+  <tbody>{% for r in data %}<tr><td class="sticky-col">{% if r.student_id %}<a href="{{ url_for('student_detail', sid=r.student_id) }}">{{ r.name }}</a>{% else %}{{ r.name }} <small class="muted">(chưa gắn hồ sơ)</small>{% endif %}</td>
+    <td>{{ r.code or '' }}</td><td class="num">{{ r.sessions }}</td><td class="num">{{ '%.1f'|format(r.minutes / 60) }}</td><td class="num">{{ r.center_n }}</td><td class="num">{{ r.private_n }}</td>
+    <td class="num">{{ r.makeup_n or '' }}</td><td>{{ r.first_day|dmy }}</td><td>{{ r.last_day|dmy }}</td></tr>
+  {% else %}<tr><td colspan="9" class="muted">Không có buổi dạy đã xác nhận trong khoảng này.</td></tr>{% endfor %}</tbody></table></div>
+
+{% elif tab == 'co-so' %}
+<div class="tablewrap"><table>
+  <thead><tr><th>Cơ sở</th><th>Loại hình</th><th class="num">Số ca</th><th class="num">Giờ</th><th class="num">Lượt HV</th><th class="num">Dạy thử</th><th class="num">Dạy bù</th></tr></thead>
+  <tbody>{% for r in data %}<tr><td>{{ r.location }}</td><td>{{ 'Trung tâm' if r.teaching_type == 'center' else 'Dạy riêng' }}</td><td class="num">{{ r.sessions }}</td>
+    <td class="num">{{ '%.1f'|format(r.minutes / 60) }}</td><td class="num">{{ r.attendances }}</td><td class="num">{{ r.trial_n or '' }}</td><td class="num">{{ r.makeup_n or '' }}</td></tr>
+  {% else %}<tr><td colspan="7" class="muted">Không có dữ liệu.</td></tr>{% endfor %}</tbody></table></div>
+
+{% else %}
+{% set due = namespace(v=0, p=0) %}
+<div class="tablewrap"><table>
+  <thead><tr><th>Ngày</th><th>Giờ</th><th>Địa điểm</th><th>Học viên</th><th>Giá buổi</th><th>Đã thu</th><th>Trạng thái</th><th></th></tr></thead>
+  <tbody>{% for r in data %}{% set due.p = due.p + (r.paid_amount or 0) %}{% if r.payment_status in ('unpaid','partial') %}{% set due.v = due.v + (r.price_amount or 0) - (r.paid_amount or 0) %}{% endif %}
+    <tr><td>{{ r.session_date|dmy }}</td><td>{{ r.start_time|hm }}–{{ r.end_time|hm }}</td><td>{{ r.location_label }}</td><td>{{ r.names or '' }}</td>
+      <td>{{ r.price_amount|money }}</td><td>{{ r.paid_amount|money }}</td>
+      <td>{{ {'unpaid':'Chưa thu','partial':'Thu một phần','paid':'Đã thu','na':'Chưa có giá'}[r.payment_status] }}</td>
+      <td><a class="btn small" href="{{ url_for('actual_detail', aid=r.id) }}">Mở</a></td></tr>
+  {% else %}<tr><td colspan="8" class="muted">Không có buổi dạy riêng trong khoảng này.</td></tr>{% endfor %}
+  {% if data %}<tr class="total"><td colspan="4">Tổng</td><td></td><td>{{ due.p|money }}</td><td colspan="2">Còn phải thu: {{ due.v|money }}</td></tr>{% endif %}
+  </tbody></table></div>
+{% endif %}
+{% endblock %}

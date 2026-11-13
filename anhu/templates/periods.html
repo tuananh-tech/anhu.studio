@@ -1,0 +1,38 @@
+{% extends 'base.html' %}{% from '_m.html' import cong_nav, help with context %}
+{% block body %}
+{{ cong_nav() }}
+<h1>Kỳ chấm công</h1>
+{% call help() %}
+<ul>
+<li><b>Chốt kỳ</b> (ở trang Bảng công của tháng đó): hệ thống lưu ảnh chụp bảng công và file Excel kèm mã băm. Sau khi chốt, cơ sở dữ liệu sẽ chặn mọi sửa đổi buổi dạy trong tháng.</li>
+<li><b>Mở kỳ</b> bắt buộc ghi lý do. Mỗi lần chốt lại sẽ tạo một <b>phiên bản mới</b>; các phiên bản cũ vẫn tải lại được để đối chiếu.</li>
+</ul>
+{% endcall %}
+<section class="card">
+  <div class="tablewrap"><table>
+    <thead><tr><th>Kỳ</th><th>Trạng thái</th><th>Phiên bản</th><th>Chốt lúc</th><th>Người chốt</th><th>Mã băm file</th><th>Lần mở gần nhất</th><th></th></tr></thead>
+    <tbody>{% for p in pers %}{% set ym = '%04d-%02d'|format(p.year, p.month) %}
+      <tr><td><b>{{ '%02d'|format(p.month) }}/{{ p.year }}</b></td>
+        <td>{% if p.status == 'locked' %}<span class="badge st-confirmed">Đã chốt</span>{% else %}<span class="badge st-pending">Đang mở lại</span>{% endif %}</td>
+        <td>{{ p.version }} <small class="muted">({{ p.versions }} bản lưu)</small></td>
+        <td>{{ p.locked_at.strftime('%d/%m/%Y %H:%M') if p.locked_at else '' }}</td><td>{{ p.locker or '' }}</td>
+        <td><small><code>{{ (p.export_sha256 or '')[:16] }}</code></small></td><td>{{ p.last_unlock_reason or '' }}</td>
+        <td><a class="btn small" href="{{ url_for('timesheet_page', thang=ym) }}">Bảng công</a>
+          <a class="btn small" href="{{ url_for('timesheet_periods', thang=ym) }}">Phiên bản</a></td></tr>
+    {% else %}<tr><td colspan="8" class="muted">Chưa chốt kỳ nào. Vào Bảng công của tháng, kiểm tra xong rồi bấm “Chốt kỳ”.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% if sel %}
+<section class="card">
+  <h2>Các phiên bản đã chốt của {{ '%02d'|format(m) }}/{{ y }}</h2>
+  <ul class="list">{% for v in vers %}<li><span class="t">Phiên bản {{ v.version }}</span>
+    <span class="grow">chốt {{ v.locked_at.strftime('%d/%m/%Y %H:%M') }}{{ ' bởi ' ~ v.locker if v.locker }}
+      · TỔNG E–I: {% for k in 'EFGHI' %}{{ k }}={{ v.totals[k] if v.totals else '' }} {% endfor %}
+      {% if v.pay_total %}· tiền {{ v.pay_total|money }}{% endif %}
+      {% if v.unlocked_at %}<br><small class="muted">mở lại {{ v.unlocked_at.strftime('%d/%m/%Y %H:%M') }}: {{ v.unlock_reason }}</small>{% endif %}
+      <br><small class="muted">SHA-256 {{ v.export_sha256 }}</small></span>
+    <a class="btn small" href="{{ url_for('timesheet_period_file', vid=v.id) }}">Tải file bản {{ v.version }}</a></li>
+  {% else %}<li class="muted">Tháng này chưa có bản chốt.</li>{% endfor %}</ul>
+</section>
+{% endif %}
+{% endblock %}

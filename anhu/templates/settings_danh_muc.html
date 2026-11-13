@@ -1,0 +1,60 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, help, settings_back with context %}
+{% block body %}
+{{ settings_back() }}
+<h1>{{ title }}</h1>
+{% call help() %}
+<ul>
+<li><b>Trung tâm</b> là đơn vị bạn ký hợp đồng và đối soát công. Một trung tâm có thể có nhiều <b>cơ sở</b>.</li>
+<li>Tên cơ sở chính là giá trị cột <b>CƠ SỞ</b> trong file chấm công. Đổi tên chỉ áp dụng cho ca mới. Ca đã ghi và kỳ đã chốt giữ nguyên tên cũ.</li>
+<li>Không còn dạy ở đâu thì bấm <b>Lưu trữ</b>, không cần xóa. Lịch sử buổi dạy và bảng công cũ vẫn giữ đầy đủ, và có thể khôi phục lại bất kỳ lúc nào.</li>
+</ul>
+{% endcall %}
+{% set w = g.owner.can_write %}
+<div class="grid2">
+<section class="card">
+  <h2>Trung tâm</h2>
+  <ul class="list">{% for c in centers %}
+    <li class="{{ 'archived' if c.archived_at }}"><span class="grow"><b>{{ c.name }}</b>{% if c.contact %} · <small>{{ c.contact }}</small>{% endif %}
+      {% if c.archived_at %}<span class="badge st-void">đã lưu trữ</span>{% endif %}</span>
+      {% if w %}<details class="inline-edit"><summary>Sửa</summary>
+        <form method="post" action="{{ url_for('settings_action', action='sua-trung-tam') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ c.id }}">
+          <label>Tên <input name="name" value="{{ c.name }}" required></label>
+          <label>Liên hệ (người phụ trách, SĐT) <input name="contact" value="{{ c.contact or '' }}"></label>
+          <label>Ghi chú <textarea name="notes" rows="2">{{ c.notes or '' }}</textarea></label>
+          <button class="btn small primary">Lưu</button></form>
+        <form method="post" action="{{ url_for('settings_action', action='luu-tru-trung-tam') }}" class="mt">{{ csrf() }}<input type="hidden" name="id" value="{{ c.id }}">
+          <input type="hidden" name="archived" value="{{ '0' if c.archived_at else '1' }}">
+          <button class="btn small {{ '' if c.archived_at else 'danger' }}">{{ 'Khôi phục' if c.archived_at else 'Lưu trữ' }}</button></form>
+      </details>{% endif %}</li>
+  {% else %}<li class="muted">Chưa có trung tâm.</li>{% endfor %}</ul>
+  {% if w %}<form method="post" action="{{ url_for('settings_action', action='trung-tam') }}" class="row mt">{{ csrf() }}
+    <label class="grow">Tên trung tâm mới <input name="name" required></label><button class="btn small">Thêm</button></form>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Cơ sở / địa điểm dạy</h2>
+  <ul class="list">{% for l in locs %}
+    <li class="{{ 'archived' if l.archived_at }}"><span class="grow"><b>{{ l.name }}</b> — {{ l.center_name if l.kind == 'center_branch' else 'địa điểm dạy riêng' }}
+      <small class="muted">· {{ usage.get(l.id|string, 0) }} buổi</small>
+      {% if l.archived_at %}<span class="badge st-void">đã lưu trữ</span>{% endif %}</span>
+      {% if w %}<details class="inline-edit"><summary>Sửa</summary>
+        <form method="post" action="{{ url_for('settings_action', action='sua-co-so') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ l.id }}">
+          <label>Tên (giá trị cột CƠ SỞ) <input name="name" value="{{ l.name }}" required></label>
+          <label>Loại <select name="kind"><option value="center_branch" {{ 'selected' if l.kind == 'center_branch' }}>Cơ sở trung tâm</option>
+            <option value="private_place" {{ 'selected' if l.kind == 'private_place' }}>Địa điểm dạy riêng</option></select></label>
+          <label>Thuộc trung tâm <select name="center_id"><option value="">—</option>{% for c in centers if not c.archived_at %}<option value="{{ c.id }}" {{ 'selected' if c.id == l.center_id }}>{{ c.name }}</option>{% endfor %}</select></label>
+          <label>Địa chỉ <input name="address" value="{{ l.address or '' }}"></label>
+          <button class="btn small primary">Lưu</button></form>
+        <form method="post" action="{{ url_for('settings_action', action='luu-tru-co-so') }}" class="mt">{{ csrf() }}<input type="hidden" name="id" value="{{ l.id }}">
+          <input type="hidden" name="archived" value="{{ '0' if l.archived_at else '1' }}">
+          <button class="btn small {{ '' if l.archived_at else 'danger' }}">{{ 'Khôi phục' if l.archived_at else 'Lưu trữ' }}</button></form>
+      </details>{% endif %}</li>
+  {% else %}<li class="muted">Chưa có cơ sở.</li>{% endfor %}</ul>
+  {% if w %}<form method="post" action="{{ url_for('settings_action', action='co-so') }}" class="mt">{{ csrf() }}
+    <div class="row"><label class="grow">Tên <input name="name" required></label>
+      <label>Loại <select name="kind"><option value="center_branch">Cơ sở trung tâm</option><option value="private_place">Địa điểm dạy riêng</option></select></label>
+      <label>Thuộc trung tâm <select name="center_id"><option value="">—</option>{% for c in centers if not c.archived_at %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></label></div>
+    <button class="btn small">Thêm</button></form>{% endif %}
+</section>
+</div>
+{% endblock %}

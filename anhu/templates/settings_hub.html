@@ -1,0 +1,20 @@
+{% extends 'base.html' %}{% from '_m.html' import help with context %}
+{% block body %}
+<h1>Cài đặt &amp; quản trị</h1>
+{% call help() %}
+<p>Mọi cấu hình vận hành đều làm ngay tại đây, không cần sửa mã nguồn hay file Excel. Các thay đổi quan trọng được ghi vào
+<a href="{{ url_for('settings_section', sec='nhat-ky') }}">nhật ký</a> kèm thời điểm, người sửa, giá trị trước và sau.</p>
+<p>Lần đầu sử dụng, nên làm theo thứ tự: <b>Trung tâm &amp; cơ sở → Học viên → Lịch cố định → Quy tắc chấm công → Đơn giá</b>.</p>
+{% endcall %}
+{% if info.warnings %}
+<section class="card">
+  <h2>Cần chú ý</h2>
+  <ul>{% for w in info.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+<div class="hub">
+  {% for key, title, desc in sections %}
+  <a class="hubcard" href="{{ url_for('settings_section', sec=key) }}"><b>{{ title }}</b><span>{{ desc }}</span></a>
+  {% endfor %}
+</div>
+{% endblock %}

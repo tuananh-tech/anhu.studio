@@ -1,0 +1,70 @@
+{% extends 'base.html' %}{% from '_m.html' import csrf, help, settings_back with context %}
+{% block body %}
+{{ settings_back() }}
+<h1>{{ title }}</h1>
+{% call help() %}
+<ul>
+<li>Sheet chính của file xuất luôn giữ <b>đúng bố cục mẫu gốc</b>: các cột A:L, header hai tầng, các ô gộp, định dạng ngày dd/mm và hàng TỔNG. Các tùy chọn dưới đây chỉ thay đổi tên sheet, tên file và việc có kèm sheet phụ hay không.</li>
+<li><b>Hồ sơ ánh xạ:</b> cho biết mỗi thông tin (ngày, giờ, tên học viên…) nằm ở cột nào trong file của từng trung tâm. Lưu một lần, các lần đối soát sau sẽ tự dùng lại.</li>
+<li>Muốn tạo hồ sơ nhanh nhất: tải file của trung tâm lên ở <a href="{{ url_for('recon_page') }}">Đối soát</a>, chọn cột theo bản xem trước, rồi tick “Lưu làm hồ sơ”.</li>
+</ul>
+{% endcall %}
+{% set w = g.owner.can_write %}
+<div class="grid2">
+<section class="card">
+  <h2>File xuất bảng công</h2>
+  <form method="post" action="{{ url_for('settings_action', action='xuat-excel') }}">{{ csrf() }}
+    <label>Tên sheet chính <input name="sheet_name" value="{{ opts.sheet_name }}" maxlength="31" required></label>
+    <label>Tiền tố tên file <input name="file_prefix" value="{{ opts.file_prefix }}" maxlength="40" pattern="[A-Za-z0-9_\-]+"></label>
+    <p class="hint">Ví dụ tên file: {{ opts.file_prefix }}_{{ today.year }}-{{ '%02d'|format(today.month) }}.xlsx</p>
+    <div class="checks">
+      <label><input type="checkbox" name="include_money_row" value="1" {{ 'checked' if opts.include_money_row }}> Hàng tiền dưới TỔNG (chỉ khi đơn giá đã xác nhận đủ)</label>
+      <label><input type="checkbox" name="include_supplement" value="1" {{ 'checked' if opts.include_supplement }}> Sheet “Bổ sung” (ca &gt; 4 HV, ca cần kiểm tra)</label>
+      <label><input type="checkbox" name="include_detail" value="1" {{ 'checked' if opts.include_detail }}> Sheet “Chi tiết ca”</label>
+      <label><input type="checkbox" name="include_info" value="1" {{ 'checked' if opts.include_info }}> Sheet “Thông tin” (kỳ, phiên bản quy tắc)</label>
+    </div>
+    {% if w %}<button class="btn primary mt">Lưu tùy chọn</button>{% endif %}
+  </form>
+  <p class="mt"><a class="btn small" href="{{ url_for('blank_template') }}">Tải mẫu trống (chỉ header)</a></p>
+</section>
+
+<section class="card" id="anh-xa">
+  <h2>{{ 'Sửa' if edit else 'Thêm' }} hồ sơ ánh xạ file trung tâm</h2>
+  {% set m = edit.mapping if edit else {'start_row': 2, 'columns': {}} %}
+  <form method="post" action="{{ url_for('settings_action', action='anh-xa') }}">{{ csrf() }}
+    {% if edit %}<input type="hidden" name="id" value="{{ edit.id }}">{% endif %}
+    <div class="row"><label class="grow">Tên hồ sơ <input name="name" value="{{ edit.name if edit else '' }}" required placeholder="VD: Mẫu trung tâm A 2026"></label>
+      <label>Trung tâm <select name="center_id"><option value="">Mọi trung tâm</option>{% for c in centers %}<option value="{{ c.id }}" {{ 'selected' if edit and edit.center_id == c.id }}>{{ c.name }}</option>{% endfor %}</select></label></div>
+    <div class="row"><label>Tên sheet (để trống = sheet đầu) <input name="sheet" value="{{ m.sheet or '' }}"></label>
+      <label>Dữ liệu bắt đầu từ hàng <input type="number" name="start_row" min="1" value="{{ m.start_row }}"></label></div>
+    <div class="row">{% for k, label in FIELDS.items() %}<label>{{ label }} <input name="col_{{ k }}" value="{{ m.columns.get(k, '') }}" maxlength="3" class="narrow" placeholder="A"></label>{% endfor %}</div>
+    <label class="inline"><input type="checkbox" name="is_default" value="1" {{ 'checked' if edit and edit.is_default }}> Dùng mặc định cho trung tâm này</label>
+    {% if w %}<button class="btn primary">Lưu hồ sơ</button>{% endif %}
+    {% if edit %}<a class="btn small" href="{{ url_for('settings_section', sec='excel') }}">Hủy sửa</a>{% endif %}
+  </form>
+</section>
+</div>
+
+<section class="card">
+  <h2>Hồ sơ ánh xạ đã lưu</h2>
+  <ul class="list">{% for mp in maps %}<li class="{{ 'archived' if mp.archived_at }}">
+    <span class="grow"><b>{{ mp.name }}</b> · {{ mp.center_name or 'mọi trung tâm' }}{% if mp.is_default %} <span class="badge st-confirmed">mặc định</span>{% endif %}
+      <small class="muted">sheet {{ mp.mapping.sheet or '(đầu)' }}, từ hàng {{ mp.mapping.start_row }}:
+        {% for k, v in mp.mapping.columns.items() %}{{ FIELDS.get(k, k) }}={{ v }}{{ ', ' if not loop.last }}{% endfor %}</small></span>
+    {% if w %}<a class="btn small" href="{{ url_for('settings_section', sec='excel', sua=mp.id) }}#anh-xa">Sửa</a>
+    <form method="post" action="{{ url_for('settings_action', action='luu-tru-anh-xa') }}" class="inline">{{ csrf() }}<input type="hidden" name="id" value="{{ mp.id }}">
+      <input type="hidden" name="archived" value="{{ '0' if mp.archived_at else '1' }}"><button class="btn small">{{ 'Khôi phục' if mp.archived_at else 'Lưu trữ' }}</button></form>{% endif %}</li>
+  {% else %}<li class="muted">Chưa có hồ sơ ánh xạ.</li>{% endfor %}</ul>
+</section>
+
+<section class="card" id="import">
+  <h2>Import lịch sử từ file “Chấm công (Câu trả lời).xlsx”</h2>
+  <p class="hint">Hệ thống đọc 3 sheet <b>Nhập liệu</b>, <b>Dữ liệu</b> và <b>Chấm công</b>, tự phát hiện các phản hồi bị trùng (giữa các sheet và các khối dán lặp), và cho xem trước trước khi ghi.
+  Import lại cùng một file sẽ không nhân đôi công. Ca thiếu giờ, thiếu tên hoặc không rõ loại sẽ được đánh dấu <b>Cần kiểm tra</b>.</p>
+  {% if w %}<form method="post" action="{{ url_for('legacy_import_page') }}" enctype="multipart/form-data" class="row">{{ csrf() }}
+    <label class="grow">File .xlsx (tối đa 10 MB) <input type="file" name="file" accept=".xlsx" required></label><button class="btn primary">Xem trước</button></form>{% endif %}
+  {% if imports %}<ul class="list">{% for i in imports %}<li><span class="t">{{ i.created_at.strftime('%d/%m/%Y') }}</span><span class="grow">{{ i.filename }}</span>
+    <span class="badge">{{ {'preview':'Xem trước','applied':'Đã ghi','discarded':'Bỏ'}[i.status] }}</span>
+    <small class="muted">{{ i.stats.get('inserted', i.stats.get('new', '')) }} ca mới · {{ i.stats.get('duplicates', 0) }} phản hồi trùng</small></li>{% endfor %}</ul>{% endif %}
+</section>
+{% endblock %}
